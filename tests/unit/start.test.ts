@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const start = vi.fn().mockResolvedValue({ shutdown: vi.fn() });
 vi.mock('@hotmeshio/long-tail', async (importOriginal) => ({
@@ -7,6 +10,12 @@ vi.mock('@hotmeshio/long-tail', async (importOriginal) => ({
 }));
 
 import { startLongTailTemporal } from '../../src/start';
+
+function writeConfig(body: unknown): string {
+  const path = join(mkdtempSync(join(tmpdir(), 'lt-temporal-')), 'longtail.json');
+  writeFileSync(path, JSON.stringify(body));
+  return path;
+}
 
 describe('startLongTailTemporal', () => {
   beforeEach(() => start.mockClear());
@@ -37,6 +46,20 @@ describe('startLongTailTemporal', () => {
     const config = start.mock.calls[0][0];
     expect(config.seed).toEqual({ admin: { externalId: 'superadmin', email: undefined, password: 'pw' } });
     expect(config.roles).toEqual([{ role: 'reviewer' }, { role: 'approver' }]);
+  });
+
+  it('merges LT_START_CONFIG and lets the environment win', async () => {
+    const path = writeConfig({ roles: [{ role: 'reviewer', title: 'Reviewer' }], seed: { admin: { externalId: 'ops', password: 'pw' } } });
+    await startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: path, LT_ROLES: 'approver' });
+    const config = start.mock.calls[0][0];
+    expect(config.seed).toEqual({ admin: { externalId: 'ops', password: 'pw' } });
+    expect(config.roles).toEqual([{ role: 'approver' }]);
+  });
+
+  it('rejects LT_START_CONFIG keys the environment owns', async () => {
+    const path = writeConfig({ workers: [] });
+    await expect(startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: path })).rejects.toThrow(/workers/);
+    expect(start).not.toHaveBeenCalled();
   });
 
   it('fails loud without TEMPORAL_ADDRESS', async () => {

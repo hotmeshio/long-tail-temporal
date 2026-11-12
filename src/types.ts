@@ -30,7 +30,7 @@ export interface LTConditionalConfig {
   timeout?: string | number;
 }
 
-/** Input of the `ltOpen` activity. */
+/** Input of the `lt.open` activity. */
 export interface LTOpenInput extends Omit<LTConditionalConfig, 'timeout'> {
   workflowId: string;
   runScope: string;
@@ -51,6 +51,6 @@ export interface LTCloseInput {
 
 /** The activities a worker registers with `longTailActivities`. */
 export interface LTActivities {
-  ltOpen(input: LTOpenInput): Promise<LTOpenResult>;
-  ltClose(input: LTCloseInput): Promise<void>;
+  'lt.open'(input: LTOpenInput): Promise<LTOpenResult>;
+  'lt.close'(input: LTCloseInput): Promise<void>;
 }

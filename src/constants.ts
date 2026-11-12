@@ -3,8 +3,8 @@ export const LT_OUTCOME_SIGNAL = 'lt.outcome';
 
 /** Activity names registered by `longTailActivities`. */
 export const LT_ACTIVITY = {
-  OPEN: 'ltOpen',
-  CLOSE: 'ltClose',
+  OPEN: 'lt.open',
+  CLOSE: 'lt.close',
 } as const;
 
 /** Provider name stored on every wait this package opens. */
@@ -22,6 +22,9 @@ export const LT_ROUTES = {
   OPEN_WAIT: '/api/escalations/waits',
   cancel: (escalationId: string) => `/api/escalations/${encodeURIComponent(escalationId)}/cancel`,
 } as const;
+
+/** Largest visibility page the executions list requests. */
+export const LIST_MAX_PAGE_SIZE = 1000;
 
 export const DEFAULTS = {
   HTTP_TIMEOUT_MS: 15_000,

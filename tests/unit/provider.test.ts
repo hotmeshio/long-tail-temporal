@@ -22,7 +22,16 @@ async function waitForOpen(workflowId: string) {
     if (open) return open;
     await new Promise((r) => setTimeout(r, 50));
   }
-  throw new Error(`no ltOpen for ${workflowId}`);
+  throw new Error(`no lt.open for ${workflowId}`);
+}
+
+async function eventually<T>(read: () => Promise<T | undefined>): Promise<T> {
+  for (let i = 0; i < 100; i++) {
+    const value = await read();
+    if (value) return value;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error('timed out waiting for visibility');
 }
 
 describe('temporalProvider (local dev server)', () => {
@@ -45,9 +54,9 @@ describe('temporalProvider (local dev server)', () => {
     await env.teardown();
   });
 
-  it('is a non-native provider with execution and terminate', () => {
+  it('is a non-native provider with execution, terminate and list', () => {
     expect(provider.name).toBe('temporal');
-    expect(provider.capabilities).toEqual({ native: false, execution: true, terminate: true });
+    expect(provider.capabilities).toEqual({ native: false, execution: true, terminate: true, list: true });
   });
 
   it('delivers an outcome as the lt.outcome signal to the waiting run', async () => {
@@ -88,6 +97,33 @@ describe('temporalProvider (local dev server)', () => {
     const types = execution.events.map((e) => e.event_type);
     expect(types).toEqual(expect.arrayContaining(['workflow_execution_started', 'activity_task_scheduled', 'timer_started',
       'signal_wait_started', 'workflow_execution_signaled', 'workflow_execution_completed']));
+  });
+
+  it('lists by id prefix, type and state, with a total from the count', async () => {
+    const prefix = `list-${Date.now()}`;
+    const ids = [`${prefix}-a`, `${prefix}-b`, `${prefix}-c`];
+    for (const id of ids) await env.client.workflow.start('singleWait', { taskQueue: TASK_QUEUE, workflowId: id, args: ['k'] });
+    await Promise.all(ids.map(waitForOpen));
+    await env.client.workflow.getHandle(ids[0]).terminate('done');
+
+    // Visibility is eventually consistent.
+    const all = await eventually(async () => {
+      const page = await provider.list!({ limit: 10, offset: 0, idPrefix: prefix });
+      return page.total === 3 && page.workflows.some((w) => w.state === 'terminated') ? page : undefined;
+    });
+    expect(all.workflows.map((w) => w.workflowId).sort()).toEqual(ids);
+    expect(all.workflows.every((w) => w.workflowType === 'singleWait')).toBe(true);
+
+    const running = await provider.list!({ limit: 10, offset: 0, idPrefix: prefix, state: 'running' });
+    expect(running.total).toBe(2);
+    expect(running.workflows.every((w) => w.providerState === 'RUNNING')).toBe(true);
+    expect(await provider.list!({ limit: 10, offset: 0, idPrefix: prefix, state: 'failed' })).toMatchObject({ total: 1, workflows: [{ workflowId: ids[0] }] });
+    expect((await provider.list!({ limit: 10, offset: 0, idPrefix: prefix, workflowType: 'reviewOrder' })).total).toBe(0);
+
+    const first = await provider.list!({ limit: 2, offset: 0, idPrefix: prefix });
+    const second = await provider.list!({ limit: 2, offset: 2, idPrefix: prefix });
+    expect([...first.workflows, ...second.workflows].map((w) => w.workflowId).sort()).toEqual(ids);
+    expect([first.workflows.length, second.workflows.length, second.total]).toEqual([2, 1, 3]);
   });
 
   it('fails loud without an address', () => {

@@ -32,10 +32,10 @@ describe('mapHistory (recorded reviewOrder)', () => {
     expect(completed.duration_ms).toBeGreaterThanOrEqual(0);
   });
 
-  it('marks ltOpen as system and opens a signal wait closed by lt.outcome', async () => {
+  it('marks lt.open as system and opens a signal wait closed by lt.outcome', async () => {
     const { history, description } = reviewOrderFixture();
     const { events } = await mapHistory(history, description, converter);
-    const open = events.find((e) => e.attributes.activity_type === 'ltOpen')!;
+    const open = events.find((e) => e.attributes.activity_type === 'lt.open')!;
     expect(open.is_system).toBe(true);
     const wait = events.find((e) => e.event_type === 'signal_wait_started')!;
     const signal = events.find((e) => e.event_type === 'workflow_execution_signaled')!;

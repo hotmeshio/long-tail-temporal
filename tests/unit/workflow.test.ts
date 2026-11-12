@@ -117,5 +117,5 @@ async function waitForOpen(workflowId: string, waitKey: string): Promise<void> {
     if (fake.opened.some((o) => o.workflowId === workflowId && o.waitKey === waitKey)) return;
     await new Promise((r) => setTimeout(r, 50));
   }
-  throw new Error(`ltOpen never ran for ${workflowId}/${waitKey}`);
+  throw new Error(`lt.open never ran for ${workflowId}/${waitKey}`);
 }

@@ -9,30 +9,30 @@ afterEach(async () => { await server?.close(); server = undefined; });
 const OPEN = { workflowId: 'wf', runScope: 'run', workflowType: 'reviewOrder', waitKey: 'k', role: 'reviewer', type: 'review' };
 
 describe('longTailActivities', () => {
-  it('ltOpen posts the wait and returns the escalation', async () => {
+  it('lt.open posts the wait and returns the escalation', async () => {
     server = await startServer(() => ({ status: 201, body: { escalationId: 'e1', status: 'pending', created: true } }));
-    const { ltOpen } = longTailActivities({ url: server.url, apiKey: 'lt_bot_k' });
+    const { 'lt.open': ltOpen } = longTailActivities({ url: server.url, apiKey: 'lt_bot_k' });
     expect(await ltOpen(OPEN)).toEqual({ escalationId: 'e1', status: 'pending', created: true });
     expect(server.requests[0]).toMatchObject({ url: '/api/escalations/waits', body: OPEN });
   });
 
-  it('ltOpen throws on refusal so Temporal retries or fails the activity', async () => {
+  it('lt.open throws on refusal so Temporal retries or fails the activity', async () => {
     server = await startServer(() => ({ status: 400, body: { error: 'role is required' } }));
-    const { ltOpen } = longTailActivities({ url: server.url, apiKey: 'k' });
+    const { 'lt.open': ltOpen } = longTailActivities({ url: server.url, apiKey: 'k' });
     await expect(ltOpen(OPEN)).rejects.toThrow(/role is required/);
   });
 
-  it('ltClose cancels the escalation and treats 409 (already closed) as done', async () => {
+  it('lt.close cancels the escalation and treats 409 (already closed) as done', async () => {
     server = await startServer((req) => ({ status: req.url.includes('closed') ? 409 : 200, body: {} }));
-    const { ltClose } = longTailActivities({ url: server.url, apiKey: 'k' });
+    const { 'lt.close': ltClose } = longTailActivities({ url: server.url, apiKey: 'k' });
     await ltClose({ escalationId: 'e/1' });
     await ltClose({ escalationId: 'closed' });
     expect(server.requests.map((r) => r.url)).toEqual(['/api/escalations/e%2F1/cancel', '/api/escalations/closed/cancel']);
   });
 
-  it('ltClose throws on other failures', async () => {
+  it('lt.close throws on other failures', async () => {
     server = await startServer(() => ({ status: 500, body: { error: 'boom' } }));
-    const { ltClose } = longTailActivities({ url: server.url, apiKey: 'k' });
+    const { 'lt.close': ltClose } = longTailActivities({ url: server.url, apiKey: 'k' });
     await expect(ltClose({ escalationId: 'e' })).rejects.toThrow(/500/);
   });
 
