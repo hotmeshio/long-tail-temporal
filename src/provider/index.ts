@@ -8,16 +8,20 @@ import {
   type LTWaitOutcome,
   type LTWaitRef,
   type LTWorkflowExecution,
+  type LTWorkflowListQuery,
+  type LTWorkflowPage,
 } from '@hotmeshio/long-tail';
 import { Client, Connection, WorkflowNotFoundError, type ConnectionOptions } from '@temporalio/client';
 import type { DataConverter } from '@temporalio/common';
 
-import { LT_OUTCOME_SIGNAL, TEMPORAL_PROVIDER } from '../constants';
+import { LIST_MAX_PAGE_SIZE, LT_OUTCOME_SIGNAL, TEMPORAL_PROVIDER } from '../constants';
 import { mapHistory } from './history-map';
+import { buildListQuery } from './list-query';
 import { toJobStatus, unknownJobStatus } from './status';
 
 export { mapHistory } from './history-map';
 export { toJobStatus } from './status';
+export { buildListQuery } from './list-query';
 
 export interface TemporalProviderConfig {
   /** Temporal frontend, e.g. localhost:7233 or temporal:7233 */
@@ -34,8 +38,8 @@ export interface TemporalProviderConfig {
 
 /**
  * Temporal as Long Tail's durable provider. Long Tail calls it to deliver
- * each terminal outcome as the `lt.outcome` signal, to describe workflows,
- * export their history as a timeline, and terminate them.
+ * each terminal outcome as the `lt.outcome` signal, to describe and list
+ * workflows, export their history as a timeline, and terminate them.
  */
 export function temporalProvider(config: TemporalProviderConfig = {}): LTDurableProvider {
   const client = config.client ?? createClient(config);
@@ -43,7 +47,7 @@ export function temporalProvider(config: TemporalProviderConfig = {}): LTDurable
 
   return {
     name: TEMPORAL_PROVIDER,
-    capabilities: { native: false, execution: true, terminate: true },
+    capabilities: { native: false, execution: true, terminate: true, list: true },
 
     async deliver(ref: LTWaitRef, outcome: LTWaitOutcome): Promise<LTDeliveryResult> {
       try {
@@ -74,7 +78,25 @@ export function temporalProvider(config: TemporalProviderConfig = {}): LTDurable
     async terminate(workflowId: string, reason: string): Promise<void> {
       await handle(workflowId).terminate(reason);
     },
+
+    async list(query: LTWorkflowListQuery): Promise<LTWorkflowPage> {
+      const visibility = buildListQuery(query);
+      const [counted, workflows] = await Promise.all([client.workflow.count(visibility), listPage(client, visibility, query)]);
+      return { workflows, total: counted.count };
+    },
   };
+}
+
+/** One page by offset. Temporal pages by token, so earlier entries are read and skipped. */
+async function listPage(client: Client, visibility: string, { limit, offset }: LTWorkflowListQuery): Promise<LTJobStatus[]> {
+  const workflows: LTJobStatus[] = [];
+  let index = 0;
+  for await (const info of client.workflow.list({ query: visibility, pageSize: Math.min(offset + limit, LIST_MAX_PAGE_SIZE) })) {
+    if (index++ < offset) continue;
+    workflows.push(toJobStatus(info));
+    if (workflows.length === limit) break;
+  }
+  return workflows;
 }
 
 function createClient(config: TemporalProviderConfig): Client {

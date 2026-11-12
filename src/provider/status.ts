@@ -1,5 +1,5 @@
 import { JOB_STATE, type LTJobState, type LTJobStatus } from '@hotmeshio/long-tail';
-import type { WorkflowExecutionDescription } from '@temporalio/client';
+import type { WorkflowExecutionInfo } from '@temporalio/client';
 
 const STATE_BY_STATUS: Record<string, LTJobState> = {
   RUNNING: JOB_STATE.RUNNING,
@@ -12,8 +12,8 @@ const STATE_BY_STATUS: Record<string, LTJobState> = {
   TERMINATED: JOB_STATE.TERMINATED,
 };
 
-/** A Temporal description in Long Tail's engine-neutral shape. */
-export function toJobStatus(description: WorkflowExecutionDescription): LTJobStatus {
+/** A Temporal description or list entry in Long Tail's engine-neutral shape. */
+export function toJobStatus(description: Pick<WorkflowExecutionInfo, 'workflowId' | 'type' | 'status' | 'startTime' | 'closeTime'>): LTJobStatus {
   const name = description.status.name;
   return {
     workflowId: description.workflowId,

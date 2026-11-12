@@ -9,8 +9,8 @@ import { longTailActivities } from '../../src/worker';
 import { temporalProvider } from '../../src/provider';
 import { bundlerOptions, REVIEW_WORKFLOWS } from '../helpers/bundle';
 
-// Postgres from long-tail's docker compose; this suite owns its own database.
-const PG = { host: 'localhost', port: 5415, user: 'postgres', password: 'password' };
+// Postgres from this repo's docker compose; this suite owns its own database.
+const PG = { host: 'localhost', port: Number(process.env.PG_PORT ?? 5426), user: 'postgres', password: 'password' };
 const DATABASE = 'lt_temporal_e2e';
 const PORT = 4519;
 const BASE = `http://localhost:${PORT}`;

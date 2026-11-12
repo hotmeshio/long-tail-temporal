@@ -9,7 +9,7 @@ import {
   workflowInfo,
 } from '@temporalio/workflow';
 
-import { DEFAULTS, LT_OUTCOME_SIGNAL, OUTCOME_STATUS } from '../constants';
+import { DEFAULTS, LT_ACTIVITY, LT_OUTCOME_SIGNAL, OUTCOME_STATUS } from '../constants';
 import { durationMs } from '../duration';
 import type { LTActivities, LTConditionalConfig, LTOutcome } from '../types';
 
@@ -33,10 +33,12 @@ function installHandler(): void {
   });
 }
 
-const { ltOpen, ltClose } = proxyActivities<LTActivities>({
+const activities = proxyActivities<LTActivities>({
   startToCloseTimeout: DEFAULTS.ACTIVITY_START_TO_CLOSE,
   retry: { maximumAttempts: DEFAULTS.ACTIVITY_MAX_ATTEMPTS },
 });
+const ltOpen = activities[LT_ACTIVITY.OPEN];
+const ltClose = activities[LT_ACTIVITY.CLOSE];
 
 /**
  * Park the workflow on a Long Tail escalation and return the resolver's

@@ -49,7 +49,19 @@ const worker = await Worker.create({
 });
 ```
 
-That is the whole integration on the workflow side. `conditional()` returns the resolver's payload, or `null` when the escalation expired or was cancelled.
+That is the whole integration on the workflow side.
+
+### `conditional()` at a glance
+
+```ts
+const answer = await conditional<T>(key, ask);
+```
+
+- `key` names the wait within the workflow run. Opening the same key again returns the same escalation, so an activity retry never creates a second one.
+- `ask` describes the escalation: `role` (the queue), `type`, `description`, `priority` (1 to 4), `metadata` (searchable facets), `data` (shown to the resolver) and `timeout` (the SLA, such as `'48h'`).
+- `answer` is the resolver's payload, typed as `T`, or `null` when the escalation expired or was cancelled.
+
+The same call works in HotMesh and DBOS workflows. Long Tail's documentation is at [hotmesh.io](https://hotmesh.io/docs/start/quickstart); [conditional()](https://hotmesh.io/docs/build/conditional) covers roles, forms and facets in depth.
 
 ## What the team gets
 
@@ -58,49 +70,48 @@ That is the whole integration on the workflow side. `conditional()` returns the 
 - **Claims.** A person claims an item before working it; the claim is a lock with a time window.
 - **SLAs.** `timeout: '48h'` becomes the escalation's expiry. Long Tail expires it and the workflow receives `null`.
 - **Facets and search.** `metadata` becomes queryable facets (`orderId`, `customerTier`), so queues can be filtered, grouped and counted.
-- **A dashboard.** Queues, escalation detail, the workflow's execution timeline read from Temporal history, and a link into the Temporal UI.
+- **A dashboard.** Queues, escalation detail, a list of Temporal workflow executions, each workflow's timeline read from Temporal history, and a link into the Temporal UI.
 - **An API and MCP tools.** Everything a person can do in the dashboard, a service or an AI agent can do over HTTP or MCP, under the same RBAC.
 
 ## Getting started in five minutes
 
 Everything runs locally with Docker: Postgres, a self-hosted Temporal server and its UI, Long Tail, and an example worker.
 
-1. **Start the stack.**
+```bash
+docker compose up -d --build                # Postgres, Temporal, Temporal UI, Long Tail and the example worker
+docker compose exec worker npx tsx examples/review-order/start-workflow.ts order-1
+```
 
-   ```bash
-   git clone https://github.com/hotmeshio/long-tail-temporal.git
-   cd long-tail-temporal
-   docker compose up -d
-   ```
+Open http://localhost:3200, sign in as `superadmin` / `l0ngt@1l` (set `LT_ADMIN_PASSWORD` in `.env` to change it), open the **reviewer** queue, claim `Review order order-1` and approve it. The start script prints the workflow's result. Open the escalation's workflow to see the timeline, or follow the link into the Temporal UI at http://localhost:8080.
 
-   Until `@hotmeshio/long-tail` 0.35.0 is on npm, first pack a local long-tail checkout: `./scripts/pack-long-tail.sh ../long-tail`. The image installs it from `vendor/`.
+Try the worker restart while the review is waiting:
 
-2. **Sign in.** Open http://localhost:3200 and sign in as `superadmin` with the password in `LT_ADMIN_PASSWORD` (`l0ngt@1l` by default; set your own in `.env`).
+```bash
+docker compose exec worker npx tsx examples/review-order/start-workflow.ts order-2
+docker compose restart worker               # the worker goes away mid-wait
+# resolve order-2 in the dashboard; Temporal holds the signal and the restarted worker completes the workflow
+```
 
-3. **Create a key for the worker.** In the dashboard, open Admin, Users, Bots. Create a bot with the `reviewer` role (type admin, so it can create escalations there), then create an API key. Or with curl:
+| Port | Service | Override |
+|---|---|---|
+| 3200 | Long Tail dashboard and API | `LT_PORT` |
+| 8080 | Temporal UI | |
+| 7233 | Temporal frontend (gRPC) | |
+| 5426 | Postgres (`longtail`, `temporal`, `temporal_visibility`) | `PG_PORT` |
 
-   ```bash
-   TOKEN=$(curl -s -X POST localhost:3200/api/auth/login -H 'content-type: application/json' \
-     -d '{"username":"superadmin","password":"l0ngt@1l"}' | jq -r .token)
-   BOT=$(curl -s -X POST localhost:3200/api/bot-accounts -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-     -d '{"name":"orders-worker","roles":[{"role":"reviewer","type":"admin"}]}' | jq -r .id)
-   curl -s -X POST localhost:3200/api/bot-accounts/$BOT/api-keys -H "authorization: Bearer $TOKEN" \
-     -H 'content-type: application/json' -d '{"name":"compose"}' | jq -r .rawKey
-   ```
+The example worker mints its own Long Tail bot key at startup by signing in as the admin. That is a local convenience; in production, create a bot with write access to your roles once in the dashboard and set `LT_API_KEY`.
 
-4. **Run the example worker** with that key:
+### Developing against `temporal server start-dev`
 
-   ```bash
-   LT_API_KEY=lt_bot_... docker compose --profile example up -d worker
-   ```
+If you already develop with the Temporal CLI's dev server, keep it, and run only Postgres and Long Tail from compose:
 
-5. **Start a workflow** and watch it wait:
-
-   ```bash
-   docker compose run --rm worker npx tsx examples/review-order/start-workflow.ts order-1
-   ```
-
-6. **Resolve it.** In the dashboard, open the reviewer queue, claim `Review order order-1`, approve it. The workflow completes with your notes. Open the escalation's workflow to see the timeline, or follow the link into the Temporal UI at http://localhost:8080.
+```bash
+temporal server start-dev --ip 0.0.0.0      # Temporal on :7233, its UI on :8233
+TEMPORAL_ADDRESS=host.docker.internal:7233 TEMPORAL_UI_URL=http://localhost:8233 \
+  docker compose up -d --build --no-deps postgres long-tail
+LT_URL=http://localhost:3200 LT_ADMIN_USER=superadmin LT_ADMIN_PASSWORD=l0ngt@1l \
+  npx tsx examples/review-order/worker.ts   # your worker, on your machine, as usual
+```
 
 ## How it works
 
@@ -108,7 +119,7 @@ Everything runs locally with Docker: Postgres, a self-hosted Temporal server and
 workflow                          Long Tail                                  people and services
 ────────                          ─────────                                  ───────────────────
 conditional(key, config)
-  ├─ ltOpen activity ───────────► open the wait (idempotent) ─► escalation ─► queue, claim, form
+  ├─ lt.open activity ──────────► open the wait (idempotent) ─► escalation ─► queue, claim, form
   └─ wait for signal lt.outcome                                              resolve or cancel
                                   row reaches a terminal state ◄──────────── (or the SLA expires)
                                   relay ─► signal lt.outcome to the workflow
@@ -138,7 +149,7 @@ It names the wait within one workflow run, and opening the same key twice return
 When a person cancels the escalation, the workflow receives `null`. When the workflow itself is cancelled while waiting, `conditional()` closes the escalation before rethrowing the cancellation. If a workflow ends some other way (terminated, timed out), Long Tail's reconcile pass finds the pending escalation and cancels it.
 
 **What does the dashboard show?**
-Everything about the human side: queues, escalation detail with the form, claims, facets, the pace board, roles, users and bots. For a workflow, it shows the execution timeline built from Temporal history (activities, timers, child workflows, and each escalation wait from open to outcome), plus a link into the Temporal UI. Pages specific to HotMesh, Long Tail's built-in engine, are hidden.
+Everything about the human side: queues, escalation detail with the form, claims, facets, the pace board, roles, users and bots. **Executions** (under Workflows in the sidebar) lists Temporal workflows from Temporal's visibility store, filtered by workflow id prefix, workflow type and state, with the total from Temporal's count. Each workflow id appears once, as its latest run. For a workflow, it shows the execution timeline built from Temporal history (activities, timers, child workflows, and each escalation wait from open to outcome), plus a link into the Temporal UI. Pages specific to HotMesh, Long Tail's built-in engine, are hidden.
 
 **What about continue-as-new?**
 Each run is its own scope for keys. The timeline shows the latest run; the Temporal UI link reaches earlier runs.
@@ -156,7 +167,7 @@ The contract is small: `POST /api/escalations/waits` to open a wait, and a signa
 Source available, under Apache 2.0 with the Commons Clause. In plain words: use it, modify it and self-host it freely, in production and inside your organization, and build your own products on it. Selling Long Tail for Temporal itself, as a product or a hosted service, is reserved to HotMeshIO. See [LICENSE](./LICENSE).
 
 **What is out of scope for now?**
-Batch and accumulate escalations (one escalation collecting many items), listing Temporal workflows inside the Long Tail dashboard, starting Temporal workflows from Long Tail, schedules, and running HotMesh and Temporal workflows in the same deployment. Temporal deployments that require an API key and TLS are a later follow-on; `TEMPORAL_API_KEY` is accepted today but not covered by this guide.
+Batch and accumulate escalations (one escalation collecting many items), starting Temporal workflows from Long Tail, schedules, and running HotMesh and Temporal workflows in the same deployment. Temporal deployments that require an API key and TLS are a later follow-on; `TEMPORAL_API_KEY` is accepted today but not covered by this guide.
 
 ## Reference
 
@@ -165,7 +176,7 @@ Batch and accumulate escalations (one escalation collecting many items), listing
 | Import | Use |
 |---|---|
 | `@hotmeshio/long-tail-temporal/workflow` | `conditional`, `ltOutcome`, `outcomeOf`. Imports only `@temporalio/workflow`, so the Temporal bundler accepts it. |
-| `@hotmeshio/long-tail-temporal/worker` | `longTailActivities({ url, apiKey, timeoutMs? })` returning `ltOpen` and `ltClose`. |
+| `@hotmeshio/long-tail-temporal/worker` | `longTailActivities({ url, apiKey, timeoutMs? })` returning `lt.open` and `lt.close`. |
 | `@hotmeshio/long-tail-temporal/provider` | `temporalProvider({ address, namespace, dataConverter?, client? })` for Long Tail's `start({ durable: { provider } })`. |
 | `@hotmeshio/long-tail-temporal` | All of the above plus `startLongTailTemporal()`, the container entry. |
 
@@ -180,6 +191,7 @@ Batch and accumulate escalations (one escalation collecting many items), listing
 | `PORT`, `JWT_SECRET` | Long Tail's HTTP port and token secret. |
 | `LT_ADMIN_USER`, `LT_ADMIN_PASSWORD`, `LT_ADMIN_EMAIL` | Seeds the first superadmin. |
 | `LT_ROLES` | Comma-separated roles to declare at boot, e.g. `reviewer`. |
+| `LT_START_CONFIG` | Optional JSON file with further `start()` settings, such as role titles or SSO. |
 
 ## Development
 
@@ -190,6 +202,6 @@ npm run test:integration    # Long Tail start() + Temporal + the reviewOrder exa
 npm run build
 ```
 
-The integration test needs Postgres on `localhost:5415` (long-tail's docker compose) and creates its own `lt_temporal_e2e` database.
+The integration test uses this repo's Postgres (`docker compose up -d postgres`, port 5426; set `PG_PORT` to point elsewhere) and creates its own `lt_temporal_e2e` database. It runs Temporal in process with the SDK's test server.
 
-During development `@hotmeshio/long-tail` is linked from `../long-tail` (`file:../long-tail`). Once 0.35.0 is published, the dev dependency becomes `^0.35.0`, matching the peer dependency.
+The image installs `@hotmeshio/long-tail` from npm. To try an unreleased build, run `./scripts/pack-long-tail.sh ../long-tail`; the image then installs `vendor/*.tgz` instead.

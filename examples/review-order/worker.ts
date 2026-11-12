@@ -2,11 +2,14 @@ import { NativeConnection, Worker } from '@temporalio/worker';
 import { longTailActivities } from '@hotmeshio/long-tail-temporal/worker';
 
 import * as activities from './activities';
+import { bootstrapApiKey } from './bootstrap';
 
 export const TASK_QUEUE = 'orders';
 
 /** Runs the reviewOrder workflow and the Long Tail activities. */
 async function run() {
+  const url = process.env.LT_URL ?? 'http://localhost:3200';
+  const apiKey = process.env.LT_API_KEY || (await bootstrapApiKey(url));
   const connection = await NativeConnection.connect({ address: process.env.TEMPORAL_ADDRESS ?? 'localhost:7233' });
   const worker = await Worker.create({
     connection,
@@ -15,7 +18,7 @@ async function run() {
     workflowsPath: require.resolve('./workflows'),
     activities: {
       ...activities,
-      ...longTailActivities({ url: process.env.LT_URL!, apiKey: process.env.LT_API_KEY! }),
+      ...longTailActivities({ url, apiKey }),
     },
   });
   await worker.run();

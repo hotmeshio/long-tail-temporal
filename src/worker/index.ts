@@ -1,4 +1,4 @@
-import { DEFAULTS, LT_ROUTES } from '../constants';
+import { DEFAULTS, LT_ACTIVITY, LT_ROUTES } from '../constants';
 import type { LTActivities, LTCloseInput, LTOpenInput, LTOpenResult } from '../types';
 import { LongTailHttpError, postJson, type LongTailHttpOptions } from './http';
 
@@ -23,10 +23,10 @@ const HTTP_CONFLICT = 409;
 export function longTailActivities(config: LongTailActivityConfig): LTActivities {
   const options = resolveOptions(config);
   return {
-    async ltOpen(input: LTOpenInput): Promise<LTOpenResult> {
+    async [LT_ACTIVITY.OPEN](input: LTOpenInput): Promise<LTOpenResult> {
       return postJson<LTOpenResult>(options, LT_ROUTES.OPEN_WAIT, input);
     },
-    async ltClose({ escalationId }: LTCloseInput): Promise<void> {
+    async [LT_ACTIVITY.CLOSE]({ escalationId }: LTCloseInput): Promise<void> {
       try {
         await postJson(options, LT_ROUTES.cancel(escalationId), {});
       } catch (err) {
