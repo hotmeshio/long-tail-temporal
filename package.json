@@ -28,13 +28,17 @@
     "LICENSE",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node build/start.js",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "record:history": "tsx tests/fixtures/record-history.ts"
+    "record:history": "tsx tests/fixtures/record-history.ts",
+    "prepublishOnly": "npm run build"
   },
   "engines": {
     "node": ">=20"

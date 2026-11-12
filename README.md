@@ -199,9 +199,14 @@ Batch and accumulate escalations (one escalation collecting many items), startin
 npm install
 npm test                    # unit tests, including a local Temporal dev server
 npm run test:integration    # Long Tail start() + Temporal + the reviewOrder example over HTTP
+./scripts/smoke.sh          # one review on the running compose stack, resolved over the API
 npm run build
 ```
 
 The integration test uses this repo's Postgres (`docker compose up -d postgres`, port 5426; set `PG_PORT` to point elsewhere) and creates its own `lt_temporal_e2e` database. It runs Temporal in process with the SDK's test server.
 
 The image installs `@hotmeshio/long-tail` from npm. To try an unreleased build, run `./scripts/pack-long-tail.sh ../long-tail`; the image then installs `vendor/*.tgz` instead.
+
+### Releasing
+
+CI runs on every pull request and every push to `main`. To release, bump `version` in `package.json` and merge to `main`. The Release workflow runs CI again, publishes the version to npm with provenance, tags `v<version>` and creates a GitHub release. A version npm already has is skipped.
