@@ -1,6 +1,6 @@
 {
   "name": "@hotmeshio/long-tail-temporal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Long Tail escalations for Temporal workflows: one call, conditional().",
   "license": "SEE LICENSE IN LICENSE",
   "main": "./build/index.js",
@@ -28,20 +28,24 @@
     "LICENSE",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node build/start.js",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "record:history": "tsx tests/fixtures/record-history.ts"
+    "record:history": "tsx tests/fixtures/record-history.ts",
+    "prepublishOnly": "npm run build"
   },
   "engines": {
     "node": ">=20"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/hotmeshio/long-tail-temporal.git"
+    "url": "git+https://github.com/hotmeshio/long-tail-temporal.git"
   },
   "dependencies": {
     "@temporalio/client": "^1.25.0",
