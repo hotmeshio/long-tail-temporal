@@ -1,0 +1,76 @@
+{
+  "name": "@hotmeshio/long-tail-temporal",
+  "version": "0.1.0",
+  "description": "Long Tail escalations for Temporal workflows: one call, conditional().",
+  "license": "SEE LICENSE IN LICENSE",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./workflow": {
+      "types": "./build/workflow/index.d.ts",
+      "default": "./build/workflow/index.js"
+    },
+    "./worker": {
+      "types": "./build/worker/index.d.ts",
+      "default": "./build/worker/index.js"
+    },
+    "./provider": {
+      "types": "./build/provider/index.d.ts",
+      "default": "./build/provider/index.js"
+    }
+  },
+  "files": [
+    "build/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node build/start.js",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "record:history": "tsx tests/fixtures/record-history.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hotmeshio/long-tail-temporal.git"
+  },
+  "dependencies": {
+    "@temporalio/client": "^1.25.0",
+    "@temporalio/common": "^1.25.0",
+    "@temporalio/proto": "^1.25.0",
+    "@temporalio/workflow": "^1.25.0"
+  },
+  "devDependencies": {
+    "@hotmeshio/long-tail": "file:../long-tail",
+    "@temporalio/activity": "^1.25.0",
+    "@temporalio/testing": "^1.25.0",
+    "@temporalio/worker": "^1.25.0",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "peerDependencies": {
+    "@hotmeshio/long-tail": "^0.35.0",
+    "@temporalio/worker": "^1.25.0"
+  },
+  "peerDependenciesMeta": {
+    "@hotmeshio/long-tail": {
+      "optional": true
+    },
+    "@temporalio/worker": {
+      "optional": true
+    }
+  }
+}

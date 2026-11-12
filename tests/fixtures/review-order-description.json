@@ -1,0 +1,12 @@
+{
+  "workflowId": "order-fixture",
+  "runId": "01a1cd32-b9e8-732c-91c5-ce33212917f8",
+  "type": "reviewOrder",
+  "taskQueue": "record",
+  "status": {
+    "code": 2,
+    "name": "COMPLETED"
+  },
+  "startTime": "2026-11-12T00:40:16.104Z",
+  "closeTime": "2026-11-12T00:40:17.189Z"
+}
