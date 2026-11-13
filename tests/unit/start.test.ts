@@ -56,9 +56,15 @@ describe('startLongTailTemporal', () => {
     expect(config.roles).toEqual([{ role: 'approver' }]);
   });
 
+  it('passes workers from LT_START_CONFIG through, to register workflows for invoke', async () => {
+    const workers = [{ taskQueue: 'orders', workflow: 'reviewOrderRequest', config: { invocable: true } }];
+    await startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: writeConfig({ workers }) });
+    expect(start.mock.calls[0][0].workers).toEqual(workers);
+  });
+
   it('rejects LT_START_CONFIG keys the environment owns', async () => {
-    const path = writeConfig({ workers: [] });
-    await expect(startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: path })).rejects.toThrow(/workers/);
+    const path = writeConfig({ examples: true });
+    await expect(startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: path })).rejects.toThrow(/examples/);
     expect(start).not.toHaveBeenCalled();
   });
 

@@ -13,7 +13,7 @@ import { DEFAULTS, LT_ACTIVITY, LT_OUTCOME_SIGNAL, OUTCOME_STATUS } from '../con
 import { durationMs } from '../duration';
 import type { LTActivities, LTConditionalConfig, LTOutcome } from '../types';
 
-export type { LTConditionalConfig, LTOutcome } from '../types';
+export type { LTConditionalConfig, LTEnvelope, LTOutcome } from '../types';
 export { LT_OUTCOME_SIGNAL, OUTCOME_STATUS } from '../constants';
 
 /** The signal Long Tail delivers each terminal outcome on. */

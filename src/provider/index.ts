@@ -10,6 +10,7 @@ import {
   type LTWorkflowExecution,
   type LTWorkflowListQuery,
   type LTWorkflowPage,
+  type LTWorkflowStartInput,
 } from '@hotmeshio/long-tail';
 import { Client, Connection, WorkflowNotFoundError, type ConnectionOptions } from '@temporalio/client';
 import type { DataConverter } from '@temporalio/common';
@@ -39,7 +40,8 @@ export interface TemporalProviderConfig {
 /**
  * Temporal as Long Tail's durable provider. Long Tail calls it to deliver
  * each terminal outcome as the `lt.outcome` signal, to describe and list
- * workflows, export their history as a timeline, and terminate them.
+ * workflows, export their history as a timeline, terminate them, and start
+ * the workflows Long Tail invokes or schedules.
  */
 export function temporalProvider(config: TemporalProviderConfig = {}): LTDurableProvider {
   const client = config.client ?? createClient(config);
@@ -47,7 +49,7 @@ export function temporalProvider(config: TemporalProviderConfig = {}): LTDurable
 
   return {
     name: TEMPORAL_PROVIDER,
-    capabilities: { native: false, execution: true, terminate: true, list: true },
+    capabilities: { native: false, execution: true, terminate: true, list: true, start: true },
 
     async deliver(ref: LTWaitRef, outcome: LTWaitOutcome): Promise<LTDeliveryResult> {
       try {
@@ -77,6 +79,10 @@ export function temporalProvider(config: TemporalProviderConfig = {}): LTDurable
 
     async terminate(workflowId: string, reason: string): Promise<void> {
       await handle(workflowId).terminate(reason);
+    },
+
+    async start({ workflowType, workflowId, taskQueue, args }: LTWorkflowStartInput): Promise<void> {
+      await client.workflow.start(workflowType, { taskQueue, workflowId, args });
     },
 
     async list(query: LTWorkflowListQuery): Promise<LTWorkflowPage> {
