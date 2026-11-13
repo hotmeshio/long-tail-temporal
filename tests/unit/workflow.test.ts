@@ -41,12 +41,12 @@ describe('conditional (workflow)', () => {
     expect(await handle.result()).toEqual({ value: { approved: false }, status: 'resolved' });
   });
 
-  it('returns null when expired or cancelled', async () => {
-    for (const status of ['expired', 'cancelled'] as const) {
+  it('returns false when expired and null when cancelled', async () => {
+    for (const [status, value] of [['expired', false], ['cancelled', null]] as const) {
       const handle = await start(['k']);
       await waitForOpen(handle.workflowId, 'k');
       await handle.signal(LT_OUTCOME_SIGNAL, outcome('k', status));
-      expect(await handle.result()).toEqual({ value: null, status });
+      expect(await handle.result()).toEqual({ value, status });
     }
   });
 
@@ -58,7 +58,7 @@ describe('conditional (workflow)', () => {
     expect(await handle.result()).toEqual({ value: { left: { passed: true }, right: { passed: false } }, status: 'resolved' });
   });
 
-  it('returns the collection an expiry kept, and null for an expiry without one', async () => {
+  it('returns the collection an expiry kept', async () => {
     const kept = await start(['partial'], nextId(), 'batchWait');
     await waitForOpen(kept.workflowId, 'partial');
     await kept.signal(LT_OUTCOME_SIGNAL, outcome('partial', 'expired', { left: { passed: true }, $trigger: 'timeout' }));
@@ -87,7 +87,7 @@ describe('conditional (workflow)', () => {
     await a.signal(LT_OUTCOME_SIGNAL, outcome('shared', 'resolved', { approved: true }));
     await b.signal(LT_OUTCOME_SIGNAL, outcome('shared', 'expired'));
     expect(await a.result()).toEqual({ value: { approved: true }, status: 'resolved' });
-    expect(await b.result()).toEqual({ value: null, status: 'expired' });
+    expect(await b.result()).toEqual({ value: false, status: 'expired' });
   });
 
   it('turns the timeout into expiresAt and fails on a malformed timeout', async () => {

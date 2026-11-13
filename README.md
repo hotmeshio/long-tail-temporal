@@ -37,7 +37,7 @@ activities: { ...activities, ...longTailActivities({ url: LT_URL, apiKey: LT_API
 - **API and MCP.** Anything a person does, a service or an agent can do over HTTP or MCP, under the same permissions. Workflows call MCP tools with `tools.call(server, tool, args)`.
 - **Invoke and schedules.** Register a workflow and start it from the dashboard, HTTP, MCP or a cron schedule.
 
-`conditionalOutcome()` returns the whole outcome: `status`, `data`, `escalationId`, `resolvedBy` and `resolvedAt`. Batches, accumulators, signal keys, assignment, lineage and form prefill are options on the same call. Machine line workflows import their contracts from `@hotmeshio/long-tail/machines/contracts`, which fits the workflow bundle.
+`conditional()` returns the payload, `false` when the wait expired, or `null` when it was cancelled, the same as on HotMesh. `withResolution: true` adds who resolved it and when, and `conditionalOutcome()` returns the raw record. Batches, accumulators, signal keys, assignment, lineage and form prefill are options on the same call. Machine line workflows import their contracts from `@hotmeshio/long-tail/machines/contracts`, which fits the workflow bundle.
 
 ## Run it
 
