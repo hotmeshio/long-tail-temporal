@@ -1,4 +1,5 @@
 {
+  "roles": [{ "role": "reviewer", "title": "Reviewer" }],
   "workers": [
     {
       "taskQueue": "orders",
@@ -46,6 +47,19 @@
             "timeout": { "type": "string", "title": "Deadline, such as 48h" }
           },
           "required": ["orderId"]
+        }
+      }
+    },
+    {
+      "taskQueue": "orders",
+      "workflow": "countPendingReviews",
+      "config": {
+        "invocable": true,
+        "description": "Count a role's pending reviews; set a schedule to run it on a cron",
+        "invocationRoles": ["reviewer"],
+        "inputSchema": {
+          "type": "object",
+          "properties": { "role": { "type": "string", "title": "Role", "default": "reviewer" } }
         }
       }
     }

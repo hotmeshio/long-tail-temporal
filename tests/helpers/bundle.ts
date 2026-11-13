@@ -16,3 +16,4 @@ export const bundlerOptions: WorkerOptions['bundlerOptions'] = {
 };
 
 export const REVIEW_WORKFLOWS = path.join(ROOT, 'examples/review-order/workflows.ts');
+export const MACHINE_LINE_WORKFLOWS = path.join(ROOT, 'examples/machine-line/workflows.ts');

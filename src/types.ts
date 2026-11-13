@@ -28,7 +28,53 @@ export interface LTConditionalConfig extends LTCollectionConfig {
   data?: Record<string, unknown>;
   /** SLA: '30s', '15m', '48h', '7d', '2w' or milliseconds. Long Tail expires the row after it. */
   timeout?: string | number;
+  /** Render-only data for the form: `formDefaults` prefills it, `confidence` drives `x-lt-confidence`, any key reads as `envelope.*`. */
+  envelope?: Record<string, unknown>;
+  /** Knowledge entries the form reads, stored as `envelope.lookups`. */
+  lookups?: LTLookupRef[];
+  /** Stored files the form shows, stored as `envelope.files`. */
+  files?: LTFileRef[];
+  /** The role form version the resolve UI renders, stored as `metadata.schema_version`. */
+  schemaVersion?: number;
+  /** Assigns the escalation when it opens; others can still claim it. */
+  assignee?: string;
+  /** With `assignee`: claims the escalation for this many minutes when it opens. */
+  durationMinutes?: number;
+  /** The first escalation of the chain or group this one belongs to. */
+  originId?: string;
+  /** The escalation this one follows from. */
+  parentId?: string;
+  /** Addresses the wait on Long Tail's signal-key surfaces. Unique while the wait is open. */
+  signalKey?: string;
 }
+
+/** A knowledge entry a form reads: an edition pinned by number or label, or the current one. */
+export interface LTLookupRef {
+  domain: string;
+  key: string;
+  version?: number | string;
+  as?: string;
+}
+
+/** A stored file a form shows, read in the form as `file.<as>`. */
+export interface LTFileRef {
+  path: string;
+  as: string;
+  name?: string;
+  contentType?: string;
+  /** Signed link lifetime in seconds; Long Tail bounds it. */
+  expiresIn?: number;
+}
+
+/** Who resolved a wait, merged into the payload as `$resolution` by `conditional(key, { withResolution: true })`. */
+export interface LTResolution {
+  escalationId: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+}
+
+/** A payload from `conditional(key, { withResolution: true })`: `$resolution` is present on a resolve. */
+export type LTWithResolution<T> = T & { $resolution?: LTResolution };
 
 /** Input of the `lt.open` activity. */
 export interface LTOpenInput extends Omit<LTConditionalConfig, 'timeout'> {
@@ -53,6 +99,21 @@ export interface LTCloseInput {
 export interface LTActivities {
   'lt.open'(input: LTOpenInput): Promise<LTOpenResult>;
   'lt.close'(input: LTCloseInput): Promise<void>;
+}
+
+/** Input of the `lt.tools.call` activity. */
+export interface LTToolCallInput {
+  /** MCP server id or name, e.g. 'long-tail-admin'. */
+  server: string;
+  tool: string;
+  arguments?: Record<string, unknown>;
+  /** User id or external id to act as; the caller must outrank it. */
+  executeAs?: string;
+}
+
+/** The activity a worker registers with `longTailTools`. */
+export interface LTToolActivities {
+  'lt.tools.call'(input: LTToolCallInput): Promise<unknown>;
 }
 
 /**

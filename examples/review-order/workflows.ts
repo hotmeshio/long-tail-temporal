@@ -1,6 +1,6 @@
 import { proxyActivities, sleep } from '@temporalio/workflow';
 import {
-  conditional, type LTAccumulatorResult, type LTBatchMarkers, type LTEnvelope,
+  conditional, tools, type LTAccumulatorResult, type LTBatchMarkers, type LTEnvelope,
 } from '@hotmeshio/long-tail-temporal/workflow';
 
 import type * as activities from './activities';
@@ -65,4 +65,11 @@ export async function collectApprovalsRequest(envelope: LTEnvelope<{ orderId: st
   });
   if (!collected) return { data: { orderId, status: 'cancelled' } };
   return { data: { orderId, trigger: collected.$trigger, approvers: collected.$accumulated.map((item) => item.payload?.approver) } };
+}
+
+/** Invoked or scheduled from Long Tail: counts a role's pending reviews with a built-in MCP tool. */
+export async function countPendingReviews(envelope: LTEnvelope<{ role?: string }>) {
+  const role = envelope.data?.role ?? 'reviewer';
+  const found = await tools.call<{ total: number }>('long-tail-admin', 'find_escalations', { role, status: 'pending', limit: 1 });
+  return { data: { role, pending: found.total } };
 }

@@ -1,6 +1,6 @@
 # Self-hosted Long Tail + Temporal on one machine. Nothing calls out.
 # One Postgres server, three databases: longtail (Long Tail), temporal and temporal_visibility (Temporal).
-# docker compose up -d --build (scripts/pack-long-tail.sh tests an unreleased long-tail build)
+# docker compose up -d --build
 # Start a review: docker compose exec worker npx tsx examples/review-order/start-workflow.ts order-1
 # then resolve it at http://localhost:3200
 
@@ -104,11 +104,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-local-only}
       LT_ADMIN_USER: superadmin
       LT_ADMIN_PASSWORD: ${LT_ADMIN_PASSWORD:-l0ngt@1l}
-      LT_ROLES: reviewer
-      # Registers reviewOrderRequest, so the Invoke Tool and the invoke API can start it.
-      LT_START_CONFIG: /config/long-tail.json
+      # Registers the example workflows and their roles, so the Invoke Tool, the invoke API and schedules can start them.
+      LT_START_CONFIG: /config/review-order.json,/config/machine-line.json
     volumes:
-      - ./examples/review-order/long-tail.json:/config/long-tail.json:ro
+      - ./examples/review-order/long-tail.json:/config/review-order.json:ro
+      - ./examples/machine-line/long-tail.json:/config/machine-line.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -127,6 +127,22 @@ services:
       LT_URL: http://long-tail:3000
       LT_API_KEY: ${LT_API_KEY:-}
       # Local demo: with no LT_API_KEY, the worker signs in as the admin and mints a bot key.
+      LT_ADMIN_USER: superadmin
+      LT_ADMIN_PASSWORD: ${LT_ADMIN_PASSWORD:-l0ngt@1l}
+
+  machine-worker:
+    build:
+      context: .
+      target: example
+    command: ["npx", "tsx", "examples/machine-line/worker.ts"]
+    depends_on:
+      long-tail:
+        condition: service_started
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      LT_URL: http://long-tail:3000
+      LT_API_KEY: ${LT_API_KEY:-}
       LT_ADMIN_USER: superadmin
       LT_ADMIN_PASSWORD: ${LT_ADMIN_PASSWORD:-l0ngt@1l}
 

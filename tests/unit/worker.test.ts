@@ -1,6 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
 
-import { longTailActivities } from '../../src/worker';
+import { ApplicationFailure } from '@temporalio/common';
+
+import { longTailActivities, LongTailHttpError } from '../../src/worker';
 import { startServer } from '../helpers/http-server';
 
 let server: Awaited<ReturnType<typeof startServer>> | undefined;
@@ -16,10 +18,30 @@ describe('longTailActivities', () => {
     expect(server.requests[0]).toMatchObject({ url: '/api/escalations/waits', body: OPEN });
   });
 
-  it('lt.open throws on refusal so Temporal retries or fails the activity', async () => {
-    server = await startServer(() => ({ status: 400, body: { error: 'role is required' } }));
+  it('lt.open forwards the escalation fields as given', async () => {
+    server = await startServer(() => ({ status: 201, body: { escalationId: 'e2', status: 'pending', created: true } }));
     const { 'lt.open': ltOpen } = longTailActivities({ url: server.url, apiKey: 'k' });
-    await expect(ltOpen(OPEN)).rejects.toThrow(/role is required/);
+    const fields = {
+      envelope: { formDefaults: { notes: 'x' } }, lookups: [{ domain: 'd', key: 'k' }], files: [{ path: 'a.pdf', as: 'doc' }],
+      schemaVersion: 2, assignee: 'u1', durationMinutes: 5, originId: 'o', parentId: 'p', signalKey: 'sk',
+    };
+    await ltOpen({ ...OPEN, ...fields });
+    expect(server.requests[0].body).toEqual({ ...OPEN, ...fields });
+  });
+
+  it('lt.open fails a refusal at once with its status and body', async () => {
+    server = await startServer(() => ({ status: 409, body: { error: 'signal key sk is held by another escalation' } }));
+    const { 'lt.open': ltOpen } = longTailActivities({ url: server.url, apiKey: 'k' });
+    const err = await ltOpen(OPEN).catch((e) => e);
+    expect(err).toBeInstanceOf(ApplicationFailure);
+    expect(err).toMatchObject({ nonRetryable: true, type: 'LongTailHttpError' });
+    expect(err.details[0]).toEqual({ status: 409, body: { error: 'signal key sk is held by another escalation' } });
+  });
+
+  it('lt.open throws a server error as is, so Temporal retries it', async () => {
+    server = await startServer(() => ({ status: 503, body: { error: 'starting' } }));
+    const { 'lt.open': ltOpen } = longTailActivities({ url: server.url, apiKey: 'k' });
+    await expect(ltOpen(OPEN)).rejects.toBeInstanceOf(LongTailHttpError);
   });
 
   it('lt.close cancels the escalation and treats 409 (already closed) as done', async () => {
