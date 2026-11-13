@@ -1,16 +1,8 @@
 # Long Tail for Temporal
 
-## Temporal workflows can now wait on people with one call: `conditional()`
+## Temporal solved reliability. Long Tail solves uncertainty.
 
-**Long Tail for Temporal gives every Temporal workflow a human queue, roles, forms, claims, SLAs and a dashboard. The workflow code changes by one import and one line.**
-
-HotMeshIO today releases Long Tail for Temporal, a source-available package and container that sits next to an existing self-hosted Temporal deployment. A workflow calls `conditional()` where it needs a person (an approval, a review, a correction), and waits. Long Tail puts the work in the right role's queue, renders the form, tracks who claimed it, expires it on its SLA, and sends exactly one terminal outcome back to the workflow. Temporal keeps owning time, retries and history. Nothing about the Temporal deployment changes.
-
-## The problem
-
-Durable workflows are good at waiting. What they wait on is the hard part. When a step needs a person, Temporal teams build the same things again and again: a table of open tasks, a way to route each task to the right people, a UI to show and resolve it, claim locks so two people do not work the same item, SLA timers, an audit of who decided what, and the plumbing that signals the workflow when someone finishes. That code lives outside the workflow, it is rarely shared between teams, and it is where most of the bugs are.
-
-## The solution: one step sideways
+Sooner or later your Temporal workflow waits on something it can't control: a reviewer's approval, a correction, a decision only a person can make. Call `conditional()` there. The workflow waits, the work lands in the right role's queue, and the answer comes back as a typed value.
 
 ```ts
 import { proxyActivities } from '@temporalio/workflow';
@@ -33,7 +25,7 @@ export async function reviewOrder(orderId: string) {
 }
 ```
 
-The worker adds the two Long Tail activities:
+The worker adds two Long Tail activities:
 
 ```ts
 import { Worker } from '@temporalio/worker';
@@ -49,7 +41,19 @@ const worker = await Worker.create({
 });
 ```
 
-That is the whole integration on the workflow side.
+A reviewer opens the `reviewer` queue in the Long Tail dashboard, claims the review, fills in the role's form and submits. The workflow resumes with their answer. Temporal keeps owning time, retries and history.
+
+### Why build the wait yourself?
+
+Every wait needs the same plumbing: a queue, routing to the right people, claims so two people never work one item, a form, permissions, a deadline, an audit trail, and the code that signals the workflow when someone answers. Teams rebuild it for every project, and it is never the product. One call covers all of it, and your Temporal deployment stays exactly as it is.
+
+- **Role queues.** Each escalation lands in a role (`reviewer`, `finance`, `support-tier-2`). Members see their queues; admins see everything.
+- **Forms and schema enforcement.** The role declares the form and the metadata schema. A resolution that fails it is refused before it reaches the workflow.
+- **Claims.** A person claims an item before working it; the claim is a lock with a time window.
+- **Deadlines.** `timeout: '48h'` becomes the escalation's expiry. Long Tail expires it and the workflow receives `null`.
+- **Facets and search.** `metadata` becomes queryable facets (`orderId`, `customerTier`), so queues can be filtered, grouped and counted.
+- **A dashboard.** Queues, escalation detail, a list of Temporal workflow executions, each workflow's timeline read from Temporal history, and a link into the Temporal UI.
+- **An API and MCP tools.** Anything a person does in the dashboard, a service or an AI agent can do over HTTP or MCP, under the same permissions.
 
 ### `conditional()` at a glance
 
@@ -57,21 +61,11 @@ That is the whole integration on the workflow side.
 const answer = await conditional<T>(key, ask);
 ```
 
-- `key` names the wait within the workflow run. Opening the same key again returns the same escalation, so an activity retry never creates a second one.
-- `ask` describes the escalation: `role` (the queue), `type`, `description`, `priority` (1 to 4), `metadata` (searchable facets), `data` (shown to the resolver) and `timeout` (the SLA, such as `'48h'`).
+- `key` names the wait within the workflow run. Opening the same key again returns the same escalation, so an activity retry reuses it.
+- `ask` describes the escalation: `role` (the queue), `type`, `description`, `priority` (1 to 4), `metadata` (searchable facets), `data` (shown to the resolver) and `timeout` (the deadline, such as `'48h'`).
 - `answer` is the resolver's payload, typed as `T`, or `null` when the escalation expired or was cancelled.
 
 The same call works in HotMesh and DBOS workflows. Long Tail's documentation is at [hotmesh.io](https://hotmesh.io/docs/start/quickstart); [conditional()](https://hotmesh.io/docs/build/conditional) covers roles, forms and facets in depth.
-
-## What the team gets
-
-- **Role queues.** Each escalation lands in a role (`reviewer`, `finance`, `support-tier-2`). Members see their queues; admins see everything.
-- **Forms and schema enforcement.** The role declares the form and the metadata schema. A resolution that does not match is refused before it reaches the workflow.
-- **Claims.** A person claims an item before working it; the claim is a lock with a time window.
-- **SLAs.** `timeout: '48h'` becomes the escalation's expiry. Long Tail expires it and the workflow receives `null`.
-- **Facets and search.** `metadata` becomes queryable facets (`orderId`, `customerTier`), so queues can be filtered, grouped and counted.
-- **A dashboard.** Queues, escalation detail, a list of Temporal workflow executions, each workflow's timeline read from Temporal history, and a link into the Temporal UI.
-- **An API and MCP tools.** Everything a person can do in the dashboard, a service or an AI agent can do over HTTP or MCP, under the same RBAC.
 
 ## Getting started in five minutes
 
