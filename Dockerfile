@@ -4,7 +4,7 @@ ARG NODE_IMAGE=node:22-bookworm-slim
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
-ARG LONG_TAIL_SPEC=@hotmeshio/long-tail@^0.35.0
+ARG LONG_TAIL_SPEC=@hotmeshio/long-tail@^0.36.0
 ARG TEMPORAL_VERSION=1.25.0
 COPY vendor/ ./vendor/
 RUN npm init -y >/dev/null \

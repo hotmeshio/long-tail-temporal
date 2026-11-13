@@ -1,6 +1,6 @@
 {
   "name": "@hotmeshio/long-tail-temporal",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Long Tail escalations for Temporal workflows: one call, conditional().",
   "homepage": "https://hotmesh.io",
   "license": "SEE LICENSE IN LICENSE",
@@ -55,7 +55,7 @@
     "@temporalio/workflow": "^1.25.0"
   },
   "devDependencies": {
-    "@hotmeshio/long-tail": "^0.35.0",
+    "@hotmeshio/long-tail": "^0.36.0",
     "@temporalio/activity": "^1.25.0",
     "@temporalio/testing": "^1.25.0",
     "@temporalio/worker": "^1.25.0",
@@ -67,7 +67,7 @@
     "vitest": "^3.2.7"
   },
   "peerDependencies": {
-    "@hotmeshio/long-tail": "^0.35.0",
+    "@hotmeshio/long-tail": "^0.36.0",
     "@temporalio/worker": "^1.25.0"
   },
   "peerDependenciesMeta": {
