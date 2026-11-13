@@ -25,7 +25,8 @@ export async function reviewOrder(orderId: string, timeout = '48h') {
     timeout,
   });
 
-  if (!decision) return { orderId, status: 'expired-or-cancelled' };
+  if (decision === false) return { orderId, status: 'expired' };
+  if (decision === null) return { orderId, status: 'cancelled' };
   if (!decision.approved) return { orderId, status: 'rejected', notes: decision.notes };
   return { orderId, status: await shipOrder(orderId), notes: decision.notes };
 }

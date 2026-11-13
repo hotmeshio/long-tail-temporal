@@ -45,10 +45,10 @@ describe('conditionalOutcome and withResolution (workflow)', () => {
     expect(result).toEqual({ approved: true, $resolution: { escalationId: 'esc-r', ...RESOLVER } });
   });
 
-  it('leaves the payload alone without withResolution, and returns null on expiry with it', async () => {
+  it('leaves the payload alone without withResolution, and returns false on expiry with it', async () => {
     expect(await settle('singleWait', 'p', outcome('p', 'resolved', { approved: false }, RESOLVER)))
       .toEqual({ value: { approved: false }, status: 'resolved' });
-    expect(await settle('resolutionWait', 'x', outcome('x', 'expired'))).toBeNull();
+    expect(await settle('resolutionWait', 'x', outcome('x', 'expired'))).toBe(false);
   });
 
   it('forwards every wait field to lt.open and keeps withResolution off the wire', async () => {

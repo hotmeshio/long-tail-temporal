@@ -25,9 +25,11 @@ const OPERATOR_TIMEOUT = '7d';
 
 /** Every row is addressable by its signal key, as on HotMesh. */
 const ask = <T>(key: string, config: LTConditionalConfig) => conditional<T>(key, { ...config, signalKey: key });
+/** An accumulator wait: it returns its collection on expiry, never `false`. */
+const collect = <T>(key: string, config: LTConditionalConfig & { accumulate: object }) => conditional<T>(key, { ...config, signalKey: key });
 
 async function handoff(input: UnitRouteInput, hop: Hop, attempt: number, senderAttempt: number): Promise<HopOutcome> {
-  const result = await ask<LTAccumulatorResult>(signalKeys.handoff(input.routeKey, hop.index, attempt), {
+  const result = await collect<LTAccumulatorResult>(signalKeys.handoff(input.routeKey, hop.index, attempt), {
     ...hopRow(input, hop, attempt, senderAttempt),
     priority: 2,
     accumulate: {},
@@ -52,7 +54,7 @@ function splitGroups(input: UnitRouteInput, hop: Hop, outcome: HopOutcome): { at
 
 /** A person collects each group where it stopped; the route ends once every group is off the line. */
 async function collectSplit(input: UnitRouteInput, firstIndex: number, groups: { at: RouteStep; units: HandoffUnit[] }[]) {
-  const results = await Promise.all(groups.map((g, i) => ask<LTAccumulatorResult>(signalKeys.handoff(input.routeKey, firstIndex + i, 1), {
+  const results = await Promise.all(groups.map((g, i) => collect<LTAccumulatorResult>(signalKeys.handoff(input.routeKey, firstIndex + i, 1), {
     ...pickupRow(input, firstIndex + i, g.at, g.units), priority: 2, accumulate: {},
   })));
   return groups.map((g, i) => ({ at: stationName(g.at), units: g.units.map((u) => u.unitId), received: results[i]?.received === true }));

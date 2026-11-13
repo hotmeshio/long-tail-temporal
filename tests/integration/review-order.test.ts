@@ -56,11 +56,11 @@ describe('reviewOrder on Temporal with Long Tail (end to end)', () => {
     expect(described.data).toMatchObject({ workflowId, state: 'completed', workflowType: 'reviewOrder' });
   });
 
-  it('expires the escalation after its SLA and the workflow receives null', async () => {
+  it('expires the escalation after its SLA and the workflow receives false', async () => {
     const workflowId = `order-sla-${Date.now()}`;
     const handle = await env.client.workflow.start('reviewOrder', { taskQueue: TASK_QUEUE, workflowId, args: [workflowId, '2s'] });
     const escalation = await escalationFor(workflowId);
-    expect(await handle.result()).toEqual({ orderId: workflowId, status: 'expired-or-cancelled' });
+    expect(await handle.result()).toEqual({ orderId: workflowId, status: 'expired' });
     const { data } = await api<any>('GET', `/api/escalations/${escalation.id}`);
     expect((data.escalation ?? data).status).toBe('expired');
   });
@@ -70,7 +70,7 @@ describe('reviewOrder on Temporal with Long Tail (end to end)', () => {
     const handle = await env.client.workflow.start('reviewOrder', { taskQueue: TASK_QUEUE, workflowId, args: [workflowId] });
     const escalation = await escalationFor(workflowId);
     expect((await api('POST', `/api/escalations/${escalation.id}/cancel`)).status).toBe(200);
-    expect(await handle.result()).toEqual({ orderId: workflowId, status: 'expired-or-cancelled' });
+    expect(await handle.result()).toEqual({ orderId: workflowId, status: 'cancelled' });
   });
 
   it('registers a workflow from start() and invokes it with the envelope', async () => {

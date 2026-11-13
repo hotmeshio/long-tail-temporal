@@ -27,6 +27,11 @@ export async function outcomeWait(key: string, extra: Partial<LTConditionalConfi
   return conditionalOutcome(key, { ...CONFIG, ...extra });
 }
 
+/** What `conditional()` returns for one wait, for any config. */
+export async function configuredWait(key: string, extra: Partial<LTConditionalConfig> & { withResolution?: boolean } = {}) {
+  return conditional(key, { ...CONFIG, ...extra });
+}
+
 /** One wait that asks for `$resolution` on its payload. */
 export async function resolutionWait(key: string) {
   return conditional<{ approved: boolean }>(key, { ...CONFIG, withResolution: true });

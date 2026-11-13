@@ -34,7 +34,7 @@ export const commandSignalKey = (requestKey: string) => `machine-command-${reque
 async function askMachine(target: CommandTarget, requestKey: string, op: string, args: Record<string, unknown>, timeout = DEFAULT_COMMAND_TIMEOUT): Promise<CommandResolution> {
   const key = commandSignalKey(requestKey);
   const reply = await conditional<CommandResolution>(key, { ...commandWait(target, op, args), signalKey: key, timeout });
-  return reply ?? {
+  return reply || {
     accepted: false, machineId: target.machineId, op, status: COMMAND_STATUS.NO_REPLY, reason: 'the row did not resolve before the timeout',
   };
 }
