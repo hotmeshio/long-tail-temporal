@@ -13,7 +13,10 @@ import { DEFAULTS, LT_ACTIVITY, LT_OUTCOME_SIGNAL, OUTCOME_STATUS } from '../con
 import { durationMs } from '../duration';
 import type { LTActivities, LTConditionalConfig, LTOutcome } from '../types';
 
-export type { LTConditionalConfig, LTEnvelope, LTOutcome } from '../types';
+export type {
+  LTAccumulateConfig, LTAccumulatedItem, LTAccumulatorResult, LTBatchMarkers, LTCollectionConfig,
+  LTConditionalConfig, LTEnvelope, LTFilledEntry, LTOutcome,
+} from '../types';
 export { LT_OUTCOME_SIGNAL, OUTCOME_STATUS } from '../constants';
 
 /** The signal Long Tail delivers each terminal outcome on. */
@@ -42,7 +45,9 @@ const ltClose = activities[LT_ACTIVITY.CLOSE];
 
 /**
  * Park the workflow on a Long Tail escalation and return the resolver's
- * payload, or `null` when the escalation expired or was cancelled.
+ * payload, or `null` when the escalation expired or was cancelled. A
+ * `batch` or `accumulate` wait returns its collection, also on an expiry
+ * that kept one (an accumulator, or `partialOnTimeout`).
  *
  * `key` names the wait and is unique within one workflow run; loops add the
  * round (`review-${round}`). Long Tail owns the queue, claim, form and SLA.
@@ -73,7 +78,8 @@ export async function conditional<T = Record<string, unknown>>(key: string, conf
     throw err;
   }
   const outcome = outcomes.get(key)!;
-  return outcome.status === OUTCOME_STATUS.RESOLVED ? ((outcome.data ?? {}) as T) : null;
+  if (outcome.status === OUTCOME_STATUS.RESOLVED) return (outcome.data ?? {}) as T;
+  return outcome.status === OUTCOME_STATUS.EXPIRED && outcome.data ? (outcome.data as T) : null;
 }
 
 /** Workflow-time expiry; a malformed timeout fails the workflow instead of retrying the task. */
