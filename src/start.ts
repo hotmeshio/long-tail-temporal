@@ -4,14 +4,15 @@ import { start } from '@hotmeshio/long-tail';
 import { temporalProvider } from './provider';
 
 const DEFAULT_ADMIN = 'superadmin';
-const ENV_OWNED_KEYS = ['database', 'server', 'durable', 'workers', 'examples'];
+const ENV_OWNED_KEYS = ['database', 'server', 'durable', 'examples'];
 
 /**
  * Long Tail with Temporal as the durable engine, configured from the environment:
  * TEMPORAL_ADDRESS, TEMPORAL_NAMESPACE, TEMPORAL_UI_URL, DATABASE_URL or POSTGRES_*,
  * PORT, JWT_SECRET, LT_ADMIN_USER / LT_ADMIN_PASSWORD / LT_ADMIN_EMAIL, LT_ROLES.
  * TEMPORAL_API_KEY is optional, for a Temporal deployment that requires one.
- * LT_START_CONFIG optionally names a JSON file with further start() settings.
+ * LT_START_CONFIG optionally names a JSON file with further start() settings,
+ * such as `workers` entries that register Temporal workflows for invoke.
  */
 export async function startLongTailTemporal(env: NodeJS.ProcessEnv = process.env) {
   // 1. Temporal provider

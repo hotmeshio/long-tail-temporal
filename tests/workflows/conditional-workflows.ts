@@ -15,3 +15,10 @@ export async function twoWaits() {
   const second = await conditional('second', CONFIG);
   return { first, second };
 }
+
+/** One batch wait that keeps its partial items on expiry. */
+export async function batchWait(key: string) {
+  const value = await conditional(key, { ...CONFIG, batch: ['left', 'right'], partialOnTimeout: true, wakeOnFill: ['left'] });
+  return { value, status: outcomeOf(key)?.status ?? null };
+}
+

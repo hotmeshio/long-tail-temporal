@@ -64,6 +64,21 @@ describe('conditional (workflow)', () => {
     }
   });
 
+  it('sends the batch declaration to lt.open', async () => {
+    const handle = await start(['batch'], nextId(), 'batchWait');
+    await waitForOpen(handle.workflowId, 'batch');
+    expect(fake.opened.find((o) => o.workflowId === handle.workflowId)).toMatchObject({ batch: ['left', 'right'], partialOnTimeout: true, wakeOnFill: ['left'] });
+    await handle.signal(LT_OUTCOME_SIGNAL, outcome('batch', 'resolved', { left: { passed: true }, right: { passed: false } }));
+    expect(await handle.result()).toEqual({ value: { left: { passed: true }, right: { passed: false } }, status: 'resolved' });
+  });
+
+  it('returns the collection an expiry kept, and null for an expiry without one', async () => {
+    const kept = await start(['partial'], nextId(), 'batchWait');
+    await waitForOpen(kept.workflowId, 'partial');
+    await kept.signal(LT_OUTCOME_SIGNAL, outcome('partial', 'expired', { left: { passed: true }, $trigger: 'timeout' }));
+    expect(await kept.result()).toEqual({ value: { left: { passed: true }, $trigger: 'timeout' }, status: 'expired' });
+  });
+
   it('keeps the first outcome and ignores a duplicate', async () => {
     const handle = await start(['dup']);
     await handle.signal(LT_OUTCOME_SIGNAL, outcome('dup', 'resolved', { approved: true }));

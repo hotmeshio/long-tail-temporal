@@ -54,9 +54,18 @@ describe('temporalProvider (local dev server)', () => {
     await env.teardown();
   });
 
-  it('is a non-native provider with execution, terminate and list', () => {
+  it('is a non-native provider with execution, terminate, list and start', () => {
     expect(provider.name).toBe('temporal');
-    expect(provider.capabilities).toEqual({ native: false, execution: true, terminate: true, list: true });
+    expect(provider.capabilities).toEqual({ native: false, execution: true, terminate: true, list: true, start: true });
+  });
+
+  it('starts a workflow by type on the task queue with the envelope as its argument', async () => {
+    const workflowId = nextId();
+    const envelope = { data: { orderId: workflowId }, metadata: {}, lt: { userId: 'u-1' } };
+    await provider.start!({ workflowType: 'reviewOrderRequest', workflowId, taskQueue: TASK_QUEUE, args: [envelope] });
+    const open = await waitForOpen(workflowId);
+    expect(open).toMatchObject({ workflowId, workflowType: 'reviewOrderRequest', metadata: { orderId: workflowId } });
+    await env.client.workflow.getHandle(workflowId).terminate('test done');
   });
 
   it('delivers an outcome as the lt.outcome signal to the waiting run', async () => {

@@ -54,6 +54,7 @@ Every wait needs the same plumbing: a queue, routing to the right people, claims
 - **Facets and search.** `metadata` becomes queryable facets (`orderId`, `customerTier`), so queues can be filtered, grouped and counted.
 - **A dashboard.** Queues, escalation detail, a list of Temporal workflow executions, each workflow's timeline read from Temporal history, and a link into the Temporal UI.
 - **An API and MCP tools.** Anything a person does in the dashboard, a service or an AI agent can do over HTTP or MCP, under the same permissions.
+- **Invoke and schedules.** Register a Temporal workflow and people, services and agents start it from the dashboard's Invoke Tool, HTTP or MCP, or Long Tail starts it on a schedule.
 
 ### `conditional()` at a glance
 
@@ -67,6 +68,46 @@ const answer = await conditional<T>(key, ask);
 
 The same call works in HotMesh and DBOS workflows. Long Tail's documentation is at [hotmesh.io](https://hotmesh.io/docs/start/quickstart); [conditional()](https://hotmesh.io/docs/build/conditional) covers roles, forms and facets in depth.
 
+## Collect many items in one escalation
+
+One wait can gather many answers: both sides of an inspection, every box in a delivery, approvals from several people. Declare it in `conditional()` with the same fields HotMesh workflows use. `LTAccumulatorResult` and `LTBatchMarkers` come from `@hotmeshio/long-tail-temporal/workflow`.
+
+```ts
+// One fill per declared key; the last fill returns every item, keyed by item.
+const sides = await conditional<Record<'left' | 'right', { passed: boolean }>>(`inspect-${orderId}`, {
+  role: 'reviewer',
+  type: 'order-inspection',
+  metadata: { orderId },
+  batch: ['left', 'right'],
+  partialOnTimeout: true,          // on expiry, return the sides inspected so far
+  timeout: '4h',
+});
+
+// Any item keys until `max` arrive, the deadline passes, or a person closes it.
+const approvals = await conditional<LTAccumulatorResult<{ approver: string }>>(`approvals-${orderId}`, {
+  role: 'reviewer',
+  type: 'order-approvals',
+  metadata: { orderId },
+  accumulate: { max: 2 },
+  timeout: '24h',
+});
+approvals?.$accumulated.map((item) => item.payload?.approver);   // in arrival order
+approvals?.$trigger;                                               // 'count', 'timeout' or 'resolve'
+```
+
+People, services and agents fill items through `POST /api/escalations/:id/resolve-batch-item` and `POST /api/escalations/:id/accumulate`, the matching MCP tools, scan rules or the dashboard. Each batch item is validated against the role's form.
+
+| Declaration | Returns |
+|---|---|
+| `batch` | Every item when the last key is filled |
+| `batch` + `wakeOnFill` | The items so far when a listed key is filled, with `$filled` and `$trigger: 'fill'` |
+| `batch` + `wakeOnFlag` | The items so far when someone flags an item, with `$flags` and `$trigger: 'flag'` |
+| `batch` + `partialOnTimeout` | On expiry, the items so far with `$trigger: 'timeout'` |
+| `batch` + `filled` | Starts with those items already satisfied |
+| `accumulate` | `$accumulated` and `$trigger`: `count` at `max`, `timeout` on expiry, `resolve` (with the resolver's payload) when a person closes it |
+
+Cancellation returns `null`, as for any wait. A batch without `partialOnTimeout` returns `null` on expiry.
+
 ## Getting started in five minutes
 
 Everything runs locally with Docker: Postgres, a self-hosted Temporal server and its UI, Long Tail, and an example worker.
@@ -77,6 +118,8 @@ docker compose exec worker npx tsx examples/review-order/start-workflow.ts order
 ```
 
 Open http://localhost:3200, sign in as `superadmin` / `l0ngt@1l` (set `LT_ADMIN_PASSWORD` in `.env` to change it), open the **reviewer** queue, claim `Review order order-1` and approve it. The start script prints the workflow's result. Open the escalation's workflow to see the timeline, or follow the link into the Temporal UI at http://localhost:8080.
+
+Start one from Long Tail instead: open **Invoke Tool**, choose `reviewOrderRequest`, enter an order id and submit. `inspectOrderRequest` and `collectApprovalsRequest` show batch and accumulate waits the same way. The review lands in the same **reviewer** queue; resolve it, and the Invoke Tool shows the result. `examples/review-order/long-tail.json` registers that workflow.
 
 Try the worker restart while the review is waiting:
 
@@ -106,6 +149,40 @@ TEMPORAL_ADDRESS=host.docker.internal:7233 TEMPORAL_UI_URL=http://localhost:8233
 LT_URL=http://localhost:3200 LT_ADMIN_USER=superadmin LT_ADMIN_PASSWORD=l0ngt@1l \
   npx tsx examples/review-order/worker.ts   # your worker, on your machine, as usual
 ```
+
+## Start workflows from Long Tail
+
+Register a workflow, and people, services and agents can start it from the Invoke Tool, `POST /api/workflows/:type/invoke` or the `invoke_workflow` MCP tool. A config with a `cronSchedule` runs it on that schedule. Long Tail passes every workflow it starts one argument, the envelope:
+
+```ts
+import { conditional, type LTEnvelope } from '@hotmeshio/long-tail-temporal/workflow';
+
+export async function reviewOrderRequest(envelope: LTEnvelope<{ orderId: string }>) {
+  return { data: await reviewOrder(envelope.data.orderId) };
+}
+```
+
+- `envelope.data` is the invoke input, checked against the config's `inputSchema` before anything starts.
+- `envelope.metadata` carries the caller's metadata; `envelope.lt` says who started the run.
+- Returning `{ data }` shows that payload in the Invoke Tool when the run completes.
+
+Register the workflow in code, through `workers` in `start()` or `LT_START_CONFIG`; `taskQueue` is the Temporal task queue your workers poll:
+
+```json
+{
+  "workers": [{
+    "taskQueue": "orders",
+    "workflow": "reviewOrderRequest",
+    "config": {
+      "invocable": true,
+      "invocationRoles": ["reviewer"],
+      "inputSchema": { "type": "object", "properties": { "orderId": { "type": "string" } }, "required": ["orderId"] }
+    }
+  }]
+}
+```
+
+The dashboard's Registry page, `PUT /api/workflows/:type/config` and the `upsert_workflow_config` MCP tool register workflows too. The invoke checks match HotMesh's: `invocable`, invocation roles, bot key scopes, the input schema and `execute_as`. Long Tail starts the run with `client.workflow.start(type, { taskQueue, workflowId, args: [envelope] })`.
 
 ## How it works
 
@@ -160,8 +237,11 @@ The contract is small: `POST /api/escalations/waits` to open a wait, and a signa
 **How is it licensed?**
 Source available, under Apache 2.0 with the Commons Clause. In plain words: use it, modify it and self-host it freely, in production and inside your organization, and build your own products on it. Selling Long Tail for Temporal itself, as a product or a hosted service, is reserved to HotMeshIO. See [LICENSE](./LICENSE).
 
-**What is out of scope for now?**
-Batch and accumulate escalations (one escalation collecting many items), starting Temporal workflows from Long Tail, schedules, and running HotMesh and Temporal workflows in the same deployment. Temporal deployments that require an API key and TLS are a later follow-on; `TEMPORAL_API_KEY` is accepted today but not covered by this guide.
+**Which Long Tail features need HotMesh?**
+HotMesh workflows running beside Temporal workflows in one Long Tail deployment, YAML pipelines, triage and the AI query surfaces.
+
+**Temporal Cloud?**
+`TEMPORAL_API_KEY` connects with an API key over TLS. This guide's examples use a self-hosted server.
 
 ## Reference
 
@@ -169,7 +249,7 @@ Batch and accumulate escalations (one escalation collecting many items), startin
 
 | Import | Use |
 |---|---|
-| `@hotmeshio/long-tail-temporal/workflow` | `conditional`, `ltOutcome`, `outcomeOf`. Imports only `@temporalio/workflow`, so the Temporal bundler accepts it. |
+| `@hotmeshio/long-tail-temporal/workflow` | `conditional`, `ltOutcome`, `outcomeOf`, and the `LTEnvelope`, `LTAccumulatorResult` and `LTBatchMarkers` types. Imports only `@temporalio/workflow`, so the Temporal bundler accepts it. |
 | `@hotmeshio/long-tail-temporal/worker` | `longTailActivities({ url, apiKey, timeoutMs? })` returning `lt.open` and `lt.close`. |
 | `@hotmeshio/long-tail-temporal/provider` | `temporalProvider({ address, namespace, dataConverter?, client? })` for Long Tail's `start({ durable: { provider } })`. |
 | `@hotmeshio/long-tail-temporal` | All of the above plus `startLongTailTemporal()`, the container entry. |
@@ -185,7 +265,7 @@ Batch and accumulate escalations (one escalation collecting many items), startin
 | `PORT`, `JWT_SECRET` | Long Tail's HTTP port and token secret. |
 | `LT_ADMIN_USER`, `LT_ADMIN_PASSWORD`, `LT_ADMIN_EMAIL` | Seeds the first superadmin. |
 | `LT_ROLES` | Comma-separated roles to declare at boot, e.g. `reviewer`. |
-| `LT_START_CONFIG` | Optional JSON file with further `start()` settings, such as role titles or SSO. |
+| `LT_START_CONFIG` | Optional JSON file with further `start()` settings, such as role titles, SSO, or `workers` that register workflows for invoke. |
 
 ## Development
 
@@ -193,7 +273,7 @@ Batch and accumulate escalations (one escalation collecting many items), startin
 npm install
 npm test                    # unit tests, including a local Temporal dev server
 npm run test:integration    # Long Tail start() + Temporal + the reviewOrder example over HTTP
-./scripts/smoke.sh          # one review on the running compose stack, resolved over the API
+./scripts/smoke.sh          # two reviews on the running compose stack, one started from Long Tail
 npm run build
 ```
 
