@@ -5,14 +5,18 @@ import { temporalProvider } from './provider';
 
 const DEFAULT_ADMIN = 'superadmin';
 const ENV_OWNED_KEYS = ['database', 'server', 'durable', 'examples'];
+/** Keys several config files add to rather than set. */
+const LIST_KEYS = ['workers', 'roles'];
 
 /**
  * Long Tail with Temporal as the durable engine, configured from the environment:
  * TEMPORAL_ADDRESS, TEMPORAL_NAMESPACE, TEMPORAL_UI_URL, DATABASE_URL or POSTGRES_*,
  * PORT, JWT_SECRET, LT_ADMIN_USER / LT_ADMIN_PASSWORD / LT_ADMIN_EMAIL, LT_ROLES.
  * TEMPORAL_API_KEY is optional, for a Temporal deployment that requires one.
- * LT_START_CONFIG optionally names a JSON file with further start() settings,
- * such as `workers` entries that register Temporal workflows for invoke.
+ * LT_START_CONFIG optionally names JSON files, comma separated, with further
+ * start() settings, such as `workers` entries that register Temporal
+ * workflows for invoke and the `roles` they wait on. `workers` and `roles`
+ * from every file are combined; any other key may be set by one file only.
  */
 export async function startLongTailTemporal(env: NodeJS.ProcessEnv = process.env) {
   // 1. Temporal provider
@@ -51,8 +55,24 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
   return value;
 }
 
-function fileConfig(path: string | undefined): Record<string, unknown> {
-  if (!path) return {};
+function fileConfig(paths: string | undefined): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const path of (paths ?? '').split(',').map((p) => p.trim()).filter(Boolean)) {
+    for (const [key, value] of Object.entries(readConfigFile(path))) {
+      if (LIST_KEYS.includes(key)) {
+        if (!Array.isArray(value)) throw new Error(`LT_START_CONFIG ${path}: "${key}" must be an array`);
+        merged[key] = [...((merged[key] as unknown[] | undefined) ?? []), ...value];
+      } else if (key in merged) {
+        throw new Error(`LT_START_CONFIG: "${key}" is set by more than one file`);
+      } else {
+        merged[key] = value;
+      }
+    }
+  }
+  return merged;
+}
+
+function readConfigFile(path: string): Record<string, unknown> {
   const parsed = JSON.parse(readFileSync(path, 'utf-8'));
   for (const key of ENV_OWNED_KEYS) {
     if (key in parsed) throw new Error(`LT_START_CONFIG may not set "${key}"; it is set by environment or not allowed with Temporal`);

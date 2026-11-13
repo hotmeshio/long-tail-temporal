@@ -1,10 +1,11 @@
-import type { LTActivities, LTCloseInput, LTOpenInput } from '../../src/types';
+import type { LTActivities, LTCloseInput, LTOpenInput, LTToolActivities, LTToolCallInput } from '../../src/types';
 
-/** Records lt.open / lt.close calls; ids are derived from the wait key. */
-export function fakeActivities() {
+/** Records lt.open / lt.close / lt.tools.call calls; ids are derived from the wait key. */
+export function fakeActivities(toolResult: (input: LTToolCallInput) => unknown = () => ({ ok: true })) {
   const opened: LTOpenInput[] = [];
   const closed: LTCloseInput[] = [];
-  const activities: LTActivities = {
+  const toolCalls: LTToolCallInput[] = [];
+  const activities: LTActivities & LTToolActivities = {
     async 'lt.open'(input) {
       opened.push(input);
       return { escalationId: `esc-${input.workflowId}-${input.waitKey}`, status: 'pending', created: true };
@@ -12,10 +13,15 @@ export function fakeActivities() {
     async 'lt.close'(input) {
       closed.push(input);
     },
+    async 'lt.tools.call'(input) {
+      toolCalls.push(input);
+      return toolResult(input);
+    },
   };
-  return { activities, opened, closed };
+  return { activities, opened, closed, toolCalls };
 }
 
-export function outcome(waitKey: string, status: 'resolved' | 'expired' | 'cancelled', data?: Record<string, unknown>) {
-  return { waitKey, escalationId: `esc-${waitKey}`, status, ...(data ? { data } : {}) };
+export function outcome(waitKey: string, status: 'resolved' | 'expired' | 'cancelled', data?: Record<string, unknown>,
+  resolution: { resolvedBy?: string; resolvedAt?: string } = {}) {
+  return { waitKey, escalationId: `esc-${waitKey}`, status, ...(data ? { data } : {}), ...resolution };
 }

@@ -1,4 +1,4 @@
-export { longTailActivities, LongTailHttpError, type LongTailActivityConfig } from './worker';
+export { longTailActivities, longTailTools, LongTailHttpError, type LongTailActivityConfig, type LongTailFailureDetails } from './worker';
 export { temporalProvider, mapHistory, toJobStatus, type TemporalProviderConfig } from './provider';
 export { startLongTailTemporal } from './start';
 export { durationMs } from './duration';
@@ -6,4 +6,5 @@ export { LT_OUTCOME_SIGNAL, LT_ACTIVITY, OUTCOME_STATUS, TEMPORAL_PROVIDER } fro
 export type {
   LTOutcome, LTOutcomeStatus, LTConditionalConfig, LTEnvelope, LTCollectionConfig, LTFilledEntry,
   LTAccumulateConfig, LTAccumulatedItem, LTAccumulatorResult, LTBatchMarkers, LTActivities, LTOpenInput, LTOpenResult, LTCloseInput,
+  LTLookupRef, LTFileRef, LTResolution, LTWithResolution, LTToolActivities, LTToolCallInput,
 } from './types';

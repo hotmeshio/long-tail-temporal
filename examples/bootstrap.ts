@@ -1,20 +1,24 @@
 // Local demo only: log in as the seeded admin and mint a bot key for the workflow side.
 // In production, create the bot and its key once in the dashboard and set LT_API_KEY.
-const BOT = { name: 'temporal-workflows', roles: [{ role: 'reviewer', type: 'admin' }] };
+export interface DemoBot {
+  /** One bot per worker: each boot revokes the bot's older keys. */
+  name: string;
+  roles: { role: string; type: 'admin' | 'member' }[];
+}
 
-export async function bootstrapApiKey(url: string): Promise<string> {
+export async function bootstrapApiKey(url: string, bot: DemoBot): Promise<string> {
   const username = process.env.LT_ADMIN_USER;
   const password = process.env.LT_ADMIN_PASSWORD;
   if (!username || !password) throw new Error('Set LT_API_KEY, or LT_ADMIN_USER and LT_ADMIN_PASSWORD for the local demo');
   const { token } = await call<{ token: string }>(url, 'POST', '/api/auth/login', '', { username, password });
   const bots = await call<Array<{ id: string; external_id: string }> | { bots: Array<{ id: string; external_id: string }> }>(url, 'GET', '/api/bot-accounts', token);
   const list = Array.isArray(bots) ? bots : bots.bots;
-  const bot = list.find((b) => b.external_id === BOT.name) ?? (await call<{ id: string }>(url, 'POST', '/api/bot-accounts', token, BOT));
-  const key = await call<{ id: string; rawKey: string }>(url, 'POST', `/api/bot-accounts/${bot.id}/api-keys`, token, { name: `review-order-worker-${Date.now()}` });
+  const account = list.find((b) => b.external_id === bot.name) ?? (await call<{ id: string }>(url, 'POST', '/api/bot-accounts', token, bot));
+  const key = await call<{ id: string; rawKey: string }>(url, 'POST', `/api/bot-accounts/${account.id}/api-keys`, token, { name: `${bot.name}-${Date.now()}` });
   // Each boot mints a key; revoke the older ones so keys do not pile up.
-  const keys = await call<Array<{ id: string }> | { keys: Array<{ id: string }> }>(url, 'GET', `/api/bot-accounts/${bot.id}/api-keys`, token);
+  const keys = await call<Array<{ id: string }> | { keys: Array<{ id: string }> }>(url, 'GET', `/api/bot-accounts/${account.id}/api-keys`, token);
   for (const old of (Array.isArray(keys) ? keys : keys.keys).filter((k) => k.id !== key.id)) {
-    await call(url, 'DELETE', `/api/bot-accounts/${bot.id}/api-keys/${old.id}`, token);
+    await call(url, 'DELETE', `/api/bot-accounts/${account.id}/api-keys/${old.id}`, token);
   }
   return key.rawKey;
 }

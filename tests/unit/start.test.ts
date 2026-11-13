@@ -62,6 +62,25 @@ describe('startLongTailTemporal', () => {
     expect(start.mock.calls[0][0].workers).toEqual(workers);
   });
 
+  it('combines workers and roles from several LT_START_CONFIG files', async () => {
+    const orders = writeConfig({ workers: [{ workflow: 'reviewOrder' }], roles: [{ role: 'reviewer' }] });
+    const line = writeConfig({ workers: [{ workflow: 'machineUnitRoute' }], roles: [{ role: 'line-exit' }], seed: { admin: { externalId: 'ops' } } });
+    await startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: `${orders}, ${line}` });
+    const config = start.mock.calls[0][0];
+    expect(config.workers).toEqual([{ workflow: 'reviewOrder' }, { workflow: 'machineUnitRoute' }]);
+    expect(config.roles).toEqual([{ role: 'reviewer' }, { role: 'line-exit' }]);
+    expect(config.seed).toEqual({ admin: { externalId: 'ops' } });
+  });
+
+  it('refuses a key two files set, and a list key that is not an array', async () => {
+    const a = writeConfig({ seed: { admin: { externalId: 'a' } } });
+    const b = writeConfig({ seed: { admin: { externalId: 'b' } } });
+    await expect(startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: `${a},${b}` })).rejects.toThrow(/"seed" is set by more than one file/);
+    const bad = writeConfig({ workers: { workflow: 'x' } });
+    await expect(startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: bad })).rejects.toThrow(/"workers" must be an array/);
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('rejects LT_START_CONFIG keys the environment owns', async () => {
     const path = writeConfig({ examples: true });
     await expect(startLongTailTemporal({ TEMPORAL_ADDRESS: 't:7233', LT_START_CONFIG: path })).rejects.toThrow(/examples/);
