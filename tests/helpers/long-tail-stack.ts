@@ -1,9 +1,9 @@
 import { Client as Pg } from 'pg';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import { start, signToken } from '@hotmeshio/long-tail';
+import { createClient, start, signToken } from '@hotmeshio/long-tail';
 
-import { longTailActivities, longTailTools } from '../../src/worker';
+import { longTailActivities, longTailTools, type LongTailActivityConfig } from '../../src/worker';
 import { temporalProvider } from '../../src/provider';
 import { bundlerOptions } from './bundle';
 
@@ -13,6 +13,9 @@ const DATABASE = 'lt_temporal_e2e';
 const PORT = 4519;
 export const BASE = `http://localhost:${PORT}`;
 const JWT_SECRET = 'lt-temporal-e2e-secret';
+
+/** How the worker reaches Long Tail. LT_CONNECTION: `in-process` (Long Tail's SDK) or `http` (a token over the HTTP API). */
+export const CONNECTION = process.env.LT_CONNECTION === 'http' ? 'http' : 'in-process';
 
 type StartConfig = Parameters<typeof start>[0];
 
@@ -32,7 +35,7 @@ async function ensureDatabase(): Promise<void> {
   await admin.end();
 }
 
-/** Long Tail in process on the Temporal provider, a local Temporal, and one worker with the Long Tail activities. */
+/** Long Tail in process on the Temporal provider, a local Temporal, and one worker with the Long Tail activities over CONNECTION. */
 export async function startLongTailStack(options: StackOptions) {
   await ensureDatabase();
   const env = await TestWorkflowEnvironment.createLocal();
@@ -47,9 +50,12 @@ export async function startLongTailStack(options: StackOptions) {
   });
   const adminUserId = longTail.adminUserId!;
   const token = signToken({ userId: adminUserId, role: 'superadmin' });
+  const connection: LongTailActivityConfig = CONNECTION === 'http'
+    ? { url: BASE, apiKey: token }
+    : { client: createClient({ auth: { userId: adminUserId, role: 'superadmin' } }) };
   const worker = await Worker.create({
     connection: env.nativeConnection, taskQueue: options.taskQueue, bundlerOptions, workflowsPath: options.workflowsPath,
-    activities: { ...options.activities, ...longTailActivities({ url: BASE, apiKey: token }), ...longTailTools({ url: BASE, apiKey: token }) },
+    activities: { ...options.activities, ...longTailActivities(connection), ...longTailTools(connection) },
   });
   const workerRun = worker.run();
 

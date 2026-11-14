@@ -1,4 +1,4 @@
-/** A non-2xx answer or a failed request to Long Tail. */
+/** A non-2xx answer or a failed request to Long Tail, over HTTP or its in-process SDK. */
 export class LongTailHttpError extends Error {
   constructor(
     message: string,
@@ -50,4 +50,23 @@ export async function postJson<T>(options: LongTailHttpOptions, path: string, bo
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** The context method of an in-process call's LongTailHttpError; its url names the SDK operation. */
+export const IN_PROCESS_METHOD = 'SDK';
+
+/** An SDK call; a non-2xx result throws `LongTailHttpError` as an HTTP answer would. */
+export async function callInProcess<T>(operation: string, call: () => Promise<{ status: number; data?: unknown; error?: string }>): Promise<T> {
+  const started = performance.now();
+  const context = () => ({ url: operation, method: IN_PROCESS_METHOD, elapsedMs: performance.now() - started });
+  let result: { status: number; data?: unknown; error?: string };
+  try {
+    result = await call();
+  } catch (err) {
+    throw new LongTailHttpError(`Long Tail ${operation} failed`, undefined, undefined, context(), { cause: err });
+  }
+  if (result.status < 200 || result.status >= 300) {
+    throw new LongTailHttpError(`Long Tail ${operation} answered ${result.status}: ${result.error ?? 'error'}`, result.status, { error: result.error }, context());
+  }
+  return result.data as T;
 }

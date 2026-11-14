@@ -26,6 +26,13 @@ export const LT_ROUTES = {
     `/api/mcp/servers/${encodeURIComponent(server)}/tools/${encodeURIComponent(tool)}/call`,
 } as const;
 
+/** Long Tail SDK operations the activities call when Long Tail runs in process. */
+export const LT_OPERATIONS = {
+  OPEN_WAIT: 'escalations.openWait',
+  CANCEL: 'escalations.cancel',
+  TOOL_CALL: 'mcp.callTool',
+} as const;
+
 /** Largest visibility page the executions list requests. */
 export const LIST_MAX_PAGE_SIZE = 1000;
 

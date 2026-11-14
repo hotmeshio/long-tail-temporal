@@ -58,6 +58,23 @@ docker compose exec worker npx tsx examples/review-order/start-workflow.ts order
 
 The Long Tail image reads `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_UI_URL`, `DATABASE_URL` (or `POSTGRES_*`), `JWT_SECRET`, `LT_ADMIN_USER`, `LT_ADMIN_PASSWORD` and `LT_START_CONFIG`: JSON files, comma separated, that register workflows and declare roles.
 
+## Deploy it
+
+Long Tail runs beside Temporal with its own Postgres database; Temporal keeps its state in the Temporal service. The choice is where the worker reaches Long Tail.
+
+**Long Tail in the worker's process.** Pass Long Tail's SDK client. The activities call Long Tail's API functions directly, with the same validation and role checks as the HTTP API, and no HTTP request or key.
+
+```ts
+import { createClient } from '@hotmeshio/long-tail';
+
+const lt = { client: createClient({ auth: { userId: workflowBotId } }) };
+activities: { ...activities, ...longTailActivities(lt), ...longTailTools(lt) }
+```
+
+**Long Tail as its own service.** Pass its URL and a bot key: `longTailActivities({ url: LT_URL, apiKey: LT_API_KEY })`.
+
+Either way, the account needs write access to the roles your workflows use.
+
 ## Learn more
 
 - [hotmesh.io](https://hotmesh.io)
@@ -72,7 +89,7 @@ The Long Tail image reads `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_UI
 ```bash
 npm install
 npm test                    # unit tests, with the Temporal test server
-npm run test:integration    # Long Tail and Temporal in process; uses the compose Postgres on port 5426
+npm run test:integration    # Long Tail and Temporal in process, by SDK then over HTTP; uses the compose Postgres on port 5426
 npm run test:e2e            # the compose stack over HTTP: machine line, MCP tools and schedules
 ./scripts/smoke.sh          # two reviews on the compose stack
 npm run build
