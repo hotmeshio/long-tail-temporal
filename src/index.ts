@@ -1,4 +1,7 @@
-export { longTailActivities, longTailTools, LongTailHttpError, type LongTailActivityConfig, type LongTailFailureDetails } from './worker';
+export {
+  longTailActivities, longTailTools, LongTailHttpError, type LongTailActivityConfig, type LongTailClient, type LongTailClientResult,
+  type LongTailFailureDetails, type LongTailHttpActivityConfig, type LongTailInProcessActivityConfig,
+} from './worker';
 export { temporalProvider, mapHistory, toJobStatus, type TemporalProviderConfig } from './provider';
 export { startLongTailTemporal } from './start';
 export { durationMs } from './duration';
