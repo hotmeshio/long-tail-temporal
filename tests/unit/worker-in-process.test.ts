@@ -15,7 +15,7 @@ describe('longTailActivities, Long Tail in process', () => {
     const client = fakeClient();
     client.escalations.openWait.mockResolvedValue({ status: 201, data: { escalationId: 'e1', status: 'pending', created: true } });
     const { 'lt.open': ltOpen } = longTailActivities({ client });
-    expect(await ltOpen(OPEN)).toEqual({ escalationId: 'e1', status: 'pending', created: true });
+    expect(await ltOpen(OPEN)).toEqual({ escalationId: 'e1', status: 'pending', created: true, runScope: 'run' });
     expect(client.escalations.openWait).toHaveBeenCalledWith(OPEN);
     expect(typeof accepts).toBe('function');
   });

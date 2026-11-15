@@ -1,6 +1,9 @@
 /** Signal the Long Tail relay sends to a waiting workflow. */
 export const LT_OUTCOME_SIGNAL = 'lt.outcome';
 
+/** Query answering the waits a workflow run is parked on. */
+export const LT_WAITS_QUERY = 'lt.waits';
+
 /** Activity names registered by `longTailActivities` and `longTailTools`. */
 export const LT_ACTIVITY = {
   OPEN: 'lt.open',

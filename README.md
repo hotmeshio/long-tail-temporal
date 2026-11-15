@@ -33,6 +33,7 @@ activities: { ...activities, ...longTailActivities({ url: LT_URL, apiKey: LT_API
 - **Forms.** The role's schema renders the form and validates every answer before it reaches the workflow.
 - **Claims.** A person claims an item before working it, so two people never work one item.
 - **Deadlines.** `timeout` becomes the escalation's SLA; on expiry the workflow gets `null`.
+- **Resets.** A wait follows its workflow through a Temporal reset, and the escalation of a run that ended is cancelled.
 - **A dashboard.** Queues, escalation detail, your Temporal executions and their timelines, and a link into the Temporal UI.
 - **API and MCP.** Anything a person does, a service or an agent can do over HTTP or MCP, under the same permissions. Workflows call MCP tools with `tools.call(server, tool, args)`.
 - **Invoke and schedules.** Register a workflow and start it from the dashboard, HTTP, MCP or a cron schedule.

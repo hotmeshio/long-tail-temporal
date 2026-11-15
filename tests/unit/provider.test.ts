@@ -1,6 +1,7 @@
 import path from 'path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
+import type { WorkflowHandle } from '@temporalio/client';
 import { Worker } from '@temporalio/worker';
 
 import * as exampleActivities from '../../examples/review-order/activities';
@@ -32,6 +33,16 @@ async function eventually<T>(read: () => Promise<T | undefined>): Promise<T> {
     await new Promise((r) => setTimeout(r, 100));
   }
   throw new Error('timed out waiting for visibility');
+}
+
+/** Resets the workflow to its first or last completed workflow task. */
+async function resetTo(handle: WorkflowHandle, task: 'first' | 'last') {
+  const completed = ((await handle.fetchHistory()).events ?? []).filter((e) => e.workflowTaskCompletedEventAttributes);
+  const target = task === 'first' ? completed[0] : completed[completed.length - 1];
+  await env.client.workflowService.resetWorkflowExecution({
+    namespace: 'default', workflowExecution: { workflowId: handle.workflowId },
+    reason: 'test', workflowTaskFinishEventId: target.eventId, requestId: nextId(),
+  });
 }
 
 describe('temporalProvider (local dev server)', () => {
@@ -83,6 +94,43 @@ describe('temporalProvider (local dev server)', () => {
     const ref = { provider: 'temporal', workflowId: open.workflowId, runScope: open.runScope, waitKey: 'k' };
     expect(await provider.deliver(ref, outcome('k', 'resolved'))).toBe('gone');
     expect(await provider.deliver({ ...ref, workflowId: 'never-started', runScope: '' }, outcome('k', 'resolved'))).toBe('gone');
+  });
+
+  it('delivers to the current run after a reset, and describes the first run as running', async () => {
+    const handle = await env.client.workflow.start('singleWait', { taskQueue: TASK_QUEUE, workflowId: nextId(), args: ['k'] });
+    const open = await waitForOpen(handle.workflowId);
+    await resetTo(handle, 'last');
+    expect(await provider.describe(handle.workflowId, open.runScope)).toMatchObject({ state: 'running', providerState: 'RUNNING' });
+    const ref = { provider: 'temporal', workflowId: open.workflowId, runScope: open.runScope, waitKey: 'k' };
+    expect(await provider.deliver(ref, outcome('k', 'resolved', { approved: true }))).toBe('delivered');
+    expect(await env.client.workflow.getHandle(handle.workflowId).result()).toEqual({ value: { approved: true }, status: 'resolved' });
+  });
+
+  it('describes a run reset before its wait opened as closed', async () => {
+    const handle = await env.client.workflow.start('singleWait', { taskQueue: TASK_QUEUE, workflowId: nextId(), args: ['k'] });
+    const open = await waitForOpen(handle.workflowId);
+    await resetTo(handle, 'first');
+    expect(await provider.describe(handle.workflowId, open.runScope)).toMatchObject({ state: 'terminated', providerState: 'TERMINATED' });
+    expect((await provider.describe(handle.workflowId)).state).toBe('running');
+    await env.client.workflow.getHandle(handle.workflowId).terminate('test done');
+  });
+
+  it('describes a closed run as running while the current run does not answer lt.waits', async () => {
+    const handle = await env.client.workflow.start('noWait', { taskQueue: TASK_QUEUE, workflowId: nextId() });
+    await eventually(async () => (await handle.fetchHistory()).events?.some((e) => e.workflowTaskCompletedEventAttributes) || undefined);
+    await resetTo(handle, 'first');
+    expect((await provider.describe(handle.workflowId, handle.firstExecutionRunId)).state).toBe('running');
+    await env.client.workflow.getHandle(handle.workflowId).terminate('test done');
+    expect((await provider.describe(handle.workflowId, handle.firstExecutionRunId)).state).toBe('terminated');
+  });
+
+  it('describes a run by its scope, and an unknown run as unknown', async () => {
+    const handle = await env.client.workflow.start('singleWait', { taskQueue: TASK_QUEUE, workflowId: nextId(), args: ['k'] });
+    const open = await waitForOpen(handle.workflowId);
+    expect((await provider.describe(handle.workflowId, open.runScope)).state).toBe('running');
+    await handle.terminate('done');
+    expect((await provider.describe(handle.workflowId, open.runScope)).state).toBe('terminated');
+    expect((await provider.describe(handle.workflowId, '00000000-0000-4000-8000-000000000000')).state).toBe('unknown');
   });
 
   it('describes running, terminated and unknown workflows', async () => {

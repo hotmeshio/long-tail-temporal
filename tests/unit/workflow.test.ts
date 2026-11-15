@@ -2,7 +2,7 @@ import path from 'path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { WorkflowFailedError } from '@temporalio/client';
 
-import { LT_OUTCOME_SIGNAL } from '../../src/constants';
+import { LT_OUTCOME_SIGNAL, LT_WAITS_QUERY } from '../../src/constants';
 import { outcome } from '../helpers/fake-activities';
 import { startWorkflowEnv, type WorkflowEnv } from '../helpers/workflow-env';
 
@@ -39,6 +39,26 @@ describe('conditional (workflow)', () => {
       signal: LT_OUTCOME_SIGNAL, signalArgs: [outcome('early', 'resolved', { approved: false })],
     });
     expect(await handle.result()).toEqual({ value: { approved: false }, status: 'resolved' });
+  });
+
+  it('accepts the outcome of the escalation it opened and passes over another for the same key', async () => {
+    const handle = await start(['k']);
+    await waitForOpen(handle.workflowId, 'k');
+    await handle.signal(LT_OUTCOME_SIGNAL, { ...outcome('k', 'cancelled'), escalationId: 'esc-earlier-run' });
+    await handle.signal(LT_OUTCOME_SIGNAL, outcome('k', 'resolved', { approved: true }));
+    expect(await handle.result()).toEqual({ value: { approved: true }, status: 'resolved' });
+  });
+
+  it('answers lt.waits with the wait it is parked on, and with none once the outcome arrives', async () => {
+    const handle = await start([], nextId(), 'twoWaits');
+    await waitForOpen(handle.workflowId, 'first');
+    expect(await handle.query(LT_WAITS_QUERY)).toEqual([{ escalationId: 'esc-first', runScope: handle.firstExecutionRunId }]);
+    await handle.signal(LT_OUTCOME_SIGNAL, outcome('first', 'resolved', {}));
+    await waitForOpen(handle.workflowId, 'second');
+    expect(await handle.query(LT_WAITS_QUERY)).toEqual([{ escalationId: 'esc-second', runScope: handle.firstExecutionRunId }]);
+    await handle.signal(LT_OUTCOME_SIGNAL, outcome('second', 'resolved', {}));
+    await handle.result();
+    expect(await handle.query(LT_WAITS_QUERY)).toEqual([]);
   });
 
   it('returns false when expired and null when cancelled', async () => {
@@ -109,6 +129,6 @@ describe('conditional (workflow)', () => {
     await waitForOpen(handle.workflowId, 'bye');
     await handle.cancel();
     await expect(handle.result()).rejects.toBeInstanceOf(WorkflowFailedError);
-    expect(fake().closed).toContainEqual({ escalationId: `esc-${handle.workflowId}-bye` });
+    expect(fake().closed).toContainEqual({ escalationId: 'esc-bye' });
   });
 });
