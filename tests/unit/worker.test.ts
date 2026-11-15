@@ -14,7 +14,7 @@ describe('longTailActivities', () => {
   it('lt.open posts the wait and returns the escalation', async () => {
     server = await startServer(() => ({ status: 201, body: { escalationId: 'e1', status: 'pending', created: true } }));
     const { 'lt.open': ltOpen } = longTailActivities({ url: server.url, apiKey: 'lt_bot_k' });
-    expect(await ltOpen(OPEN)).toEqual({ escalationId: 'e1', status: 'pending', created: true });
+    expect(await ltOpen(OPEN)).toEqual({ escalationId: 'e1', status: 'pending', created: true, runScope: 'run' });
     expect(server.requests[0]).toMatchObject({ url: '/api/escalations/waits', body: OPEN });
   });
 

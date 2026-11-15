@@ -89,6 +89,15 @@ export interface LTOpenResult {
   escalationId: string;
   status: string;
   created: boolean;
+  /** The run the wait is stored under. */
+  runScope?: string;
+}
+
+/** A wait a workflow run is parked on, as the `lt.waits` query answers. */
+export interface LTAwaitedWait {
+  escalationId: string;
+  /** The run the wait is stored under; a reset keeps it from the run that opened the wait. */
+  runScope?: string;
 }
 
 export interface LTCloseInput {

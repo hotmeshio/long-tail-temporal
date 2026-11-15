@@ -24,10 +24,10 @@ export function longTailActivities(config: LongTailActivityConfig): LTActivities
   return {
     async [LT_ACTIVITY.OPEN](input: LTOpenInput): Promise<LTOpenResult> {
       try {
-        if (isInProcess(options)) {
-          return await callInProcess<LTOpenResult>(LT_OPERATIONS.OPEN_WAIT, () => options.client.escalations.openWait({ ...input }));
-        }
-        return await postJson<LTOpenResult>(options, LT_ROUTES.OPEN_WAIT, input);
+        const opened = isInProcess(options)
+          ? await callInProcess<LTOpenResult>(LT_OPERATIONS.OPEN_WAIT, () => options.client.escalations.openWait({ ...input }))
+          : await postJson<LTOpenResult>(options, LT_ROUTES.OPEN_WAIT, input);
+        return { ...opened, runScope: input.runScope };
       } catch (err) {
         throwActivityFailure(err);
       }

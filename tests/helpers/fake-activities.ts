@@ -8,7 +8,7 @@ export function fakeActivities(toolResult: (input: LTToolCallInput) => unknown =
   const activities: LTActivities & LTToolActivities = {
     async 'lt.open'(input) {
       opened.push(input);
-      return { escalationId: `esc-${input.workflowId}-${input.waitKey}`, status: 'pending', created: true };
+      return { escalationId: `esc-${input.waitKey}`, status: 'pending', created: true, runScope: input.runScope };
     },
     async 'lt.close'(input) {
       closed.push(input);

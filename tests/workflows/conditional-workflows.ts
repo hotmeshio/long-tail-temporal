@@ -1,3 +1,5 @@
+import { sleep } from '@temporalio/workflow';
+
 import { conditional, conditionalOutcome, outcomeOf, tools } from '../../src/workflow';
 import type { LTConditionalConfig } from '../../src/types';
 
@@ -7,6 +9,11 @@ const CONFIG: LTConditionalConfig = { role: 'reviewer', type: 'decision' };
 export async function singleWait(key: string, timeout?: string) {
   const value = await conditional<{ approved: boolean }>(key, { ...CONFIG, ...(timeout ? { timeout } : {}) });
   return { value, status: outcomeOf(key)?.status ?? null };
+}
+
+/** A workflow that never waits on Long Tail. */
+export async function noWait() {
+  await sleep('1 hour');
 }
 
 /** Two waits in order. */

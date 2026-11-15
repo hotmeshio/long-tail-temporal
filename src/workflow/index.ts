@@ -1,4 +1,4 @@
-export { conditional, conditionalOutcome, outcomeOf, ltOutcome } from './conditional';
+export { conditional, conditionalOutcome, outcomeOf, ltOutcome, ltWaits } from './conditional';
 export { tools, type LTToolCallOptions } from './tools';
 export type {
   LTAccumulateConfig, LTAccumulatedItem, LTAccumulatorResult, LTBatchMarkers, LTCollectionConfig,

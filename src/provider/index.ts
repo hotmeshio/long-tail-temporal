@@ -12,10 +12,11 @@ import {
   type LTWorkflowPage,
   type LTWorkflowStartInput,
 } from '@hotmeshio/long-tail';
-import { Client, Connection, WorkflowNotFoundError, type ConnectionOptions } from '@temporalio/client';
+import { Client, Connection, QueryNotRegisteredError, WorkflowNotFoundError, type ConnectionOptions } from '@temporalio/client';
 import type { DataConverter } from '@temporalio/common';
 
-import { LIST_MAX_PAGE_SIZE, LT_OUTCOME_SIGNAL, TEMPORAL_PROVIDER } from '../constants';
+import { LIST_MAX_PAGE_SIZE, LT_OUTCOME_SIGNAL, LT_WAITS_QUERY, TEMPORAL_PROVIDER } from '../constants';
+import type { LTAwaitedWait } from '../types';
 import { mapHistory } from './history-map';
 import { buildListQuery } from './list-query';
 import { toJobStatus, unknownJobStatus } from './status';
@@ -52,18 +53,29 @@ export function temporalProvider(config: TemporalProviderConfig = {}): LTDurable
     capabilities: { native: false, execution: true, terminate: true, list: true, start: true },
 
     async deliver(ref: LTWaitRef, outcome: LTWaitOutcome): Promise<LTDeliveryResult> {
-      try {
-        await handle(ref.workflowId, ref.runScope).signal(LT_OUTCOME_SIGNAL, outcome);
-        return DELIVERY_RESULT.DELIVERED;
-      } catch (err) {
-        if (err instanceof WorkflowNotFoundError) return DELIVERY_RESULT.GONE;
-        throw err;
+      // A reset moves the wait to a new run; the workflow accepts an outcome by escalation id.
+      const runs = ref.runScope ? [ref.runScope, undefined] : [undefined];
+      for (const runId of runs) {
+        try {
+          await handle(ref.workflowId, runId).signal(LT_OUTCOME_SIGNAL, outcome);
+          return DELIVERY_RESULT.DELIVERED;
+        } catch (err) {
+          if (!(err instanceof WorkflowNotFoundError)) throw err;
+        }
       }
+      return DELIVERY_RESULT.GONE;
     },
 
-    async describe(workflowId: string): Promise<LTJobStatus> {
+    async describe(workflowId: string, runScope?: string): Promise<LTJobStatus> {
       try {
-        return toJobStatus(await handle(workflowId).describe());
+        const run = await handle(workflowId, runScope).describe();
+        if (!runScope || toJobStatus(run).state === JOB_STATE.RUNNING) return toJobStatus(run);
+        // A reset moves the waits a run was parked on to the current run.
+        const current = await handle(workflowId).describe();
+        const carried = current.runId !== run.runId
+          && toJobStatus(current).state === JOB_STATE.RUNNING
+          && await holdsWaitOf(client, workflowId, current.runId, runScope);
+        return toJobStatus(carried ? current : run);
       } catch (err) {
         if (err instanceof WorkflowNotFoundError) return unknownJobStatus(workflowId);
         throw err;
@@ -91,6 +103,17 @@ export function temporalProvider(config: TemporalProviderConfig = {}): LTDurable
       return { workflows, total: counted.count };
     },
   };
+}
+
+/** Whether the run is parked on a wait stored under `runScope`. A run that does not answer the query is taken to be. */
+async function holdsWaitOf(client: Client, workflowId: string, runId: string, runScope: string): Promise<boolean> {
+  try {
+    const waits = await client.workflow.getHandle(workflowId, runId).query<LTAwaitedWait[]>(LT_WAITS_QUERY);
+    return waits.some((wait) => !wait.runScope || wait.runScope === runScope);
+  } catch (err) {
+    if (err instanceof QueryNotRegisteredError) return true;
+    throw err;
+  }
 }
 
 /** One page by offset. Temporal pages by token, so earlier entries are read and skipped. */

@@ -2,6 +2,7 @@ import {
   ApplicationFailure,
   CancellationScope,
   condition,
+  defineQuery,
   defineSignal,
   isCancellation,
   proxyActivities,
@@ -9,25 +10,31 @@ import {
   workflowInfo,
 } from '@temporalio/workflow';
 
-import { DEFAULTS, LT_ACTIVITY, LT_OUTCOME_SIGNAL, OUTCOME_STATUS } from '../constants';
+import { DEFAULTS, LT_ACTIVITY, LT_OUTCOME_SIGNAL, LT_WAITS_QUERY, OUTCOME_STATUS } from '../constants';
 import { durationMs } from '../duration';
-import type { LTActivities, LTConditionalConfig, LTOutcome, LTResolution, LTWithResolution } from '../types';
+import type { LTActivities, LTAwaitedWait, LTConditionalConfig, LTOutcome, LTResolution, LTWithResolution } from '../types';
 
 /** The signal Long Tail delivers each terminal outcome on. */
 export const ltOutcome = defineSignal<[LTOutcome]>(LT_OUTCOME_SIGNAL);
 
+/** The query the provider reads the run's parked waits with. */
+export const ltWaits = defineQuery<LTAwaitedWait[]>(LT_WAITS_QUERY);
+
 const INVALID_CONFIG = 'LongTailInvalidConfig';
 
 // Module state is per workflow execution: the sandbox keeps a module cache per workflow.
+const delivered = new Map<string, LTOutcome>();
 const outcomes = new Map<string, LTOutcome>();
+const awaited = new Map<string, LTAwaitedWait>();
 let handlerInstalled = false;
 
 function installHandler(): void {
   if (handlerInstalled) return;
   handlerInstalled = true;
   setHandler(ltOutcome, (outcome) => {
-    if (!outcomes.has(outcome.waitKey)) outcomes.set(outcome.waitKey, outcome);
+    if (!delivered.has(outcome.escalationId)) delivered.set(outcome.escalationId, outcome);
   });
+  setHandler(ltWaits, () => [...awaited.values()]);
 }
 
 const activities = proxyActivities<LTActivities>({
@@ -62,15 +69,20 @@ export async function conditionalOutcome<T = Record<string, unknown>>(key: strin
   });
 
   // 3. Wait for the terminal outcome; close the row if this workflow is cancelled
+  awaited.set(opened.escalationId, { escalationId: opened.escalationId, ...(opened.runScope ? { runScope: opened.runScope } : {}) });
   try {
-    await condition(() => outcomes.has(key));
+    await condition(() => delivered.has(opened.escalationId));
   } catch (err) {
     if (isCancellation(err)) {
       await CancellationScope.nonCancellable(() => ltClose({ escalationId: opened.escalationId }));
     }
     throw err;
+  } finally {
+    awaited.delete(opened.escalationId);
   }
-  return outcomes.get(key)! as LTOutcome<T>;
+  const outcome = delivered.get(opened.escalationId)!;
+  outcomes.set(key, outcome);
+  return outcome as LTOutcome<T>;
 }
 
 /**
