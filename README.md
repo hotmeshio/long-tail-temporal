@@ -23,8 +23,9 @@ export async function reviewOrder(orderId: string) {
   return decision.approved ? 'approved' : 'rejected';
 }
 
-// worker.ts: register the Long Tail activities beside your own
-activities: { ...activities, ...longTailActivities({ url: LT_URL, apiKey: LT_API_KEY }) }
+// worker.ts: start Long Tail, then register its activities beside your own
+const lt = { client: createClient({ auth: { userId: workflowBotId } }) };
+activities: { ...activities, ...longTailActivities(lt) }
 ```
 
 ## What you get
@@ -46,7 +47,7 @@ activities: { ...activities, ...longTailActivities({ url: LT_URL, apiKey: LT_API
 docker compose up -d --build
 ```
 
-This runs Postgres, Temporal, the Temporal UI (http://localhost:8080), Long Tail (http://localhost:3200, `superadmin` / `l0ngt@1l`) and two example workers:
+This runs Postgres, Temporal, the Temporal UI (http://localhost:8080), Long Tail (http://localhost:3200, `superadmin` / `l0ngt@1l`) and two example workers. Each worker runs Long Tail in its own process ([`examples/long-tail.ts`](examples/long-tail.ts)), on the same database as the dashboard:
 
 - [`examples/review-order`](examples/review-order): a review, a two-sided inspection, an approvals accumulator, and a count of pending reviews through an MCP tool.
 - [`examples/machine-line`](examples/machine-line): units moving station to station as handoff rows, and machine commands such as a changeover.
@@ -61,20 +62,23 @@ The Long Tail image reads `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_UI
 
 ## Deploy it
 
-Long Tail runs beside Temporal with its own Postgres database; Temporal keeps its state in the Temporal service. The choice is where the worker reaches Long Tail.
-
-**Long Tail in the worker's process.** Pass Long Tail's SDK client. The activities call Long Tail's API functions directly, with the same validation and role checks as the HTTP API, and no HTTP request or key.
+Long Tail runs in the worker's process, on its own Postgres database; Temporal keeps its state in the Temporal service. The worker starts Long Tail, then passes its SDK client to the activities. They call Long Tail's functions directly, with the same validation and role checks as the HTTP API.
 
 ```ts
-import { createClient } from '@hotmeshio/long-tail';
+import { start, createClient } from '@hotmeshio/long-tail';
+import { temporalProvider } from '@hotmeshio/long-tail-temporal/provider';
+
+await start({
+  database: { connectionString: process.env.DATABASE_URL },
+  server: { enabled: false },
+  durable: { provider: temporalProvider({ address, namespace, apiKey }) },
+});
 
 const lt = { client: createClient({ auth: { userId: workflowBotId } }) };
 activities: { ...activities, ...longTailActivities(lt), ...longTailTools(lt) }
 ```
 
-**Long Tail as its own service.** Pass its URL and a bot key: `longTailActivities({ url: LT_URL, apiKey: LT_API_KEY })`.
-
-Either way, the account needs write access to the roles your workflows use.
+`workflowBotId` is a Long Tail bot account with write access to the roles your workflows use. The process that serves the dashboard and API calls the same `start()` on the same database with `server: { port }`; it can be the worker's process or a second service.
 
 ## Learn more
 
@@ -90,7 +94,7 @@ Either way, the account needs write access to the roles your workflows use.
 ```bash
 npm install
 npm test                    # unit tests, with the Temporal test server
-npm run test:integration    # Long Tail and Temporal in process, by SDK then over HTTP; uses the compose Postgres on port 5426
+npm run test:integration    # Long Tail and Temporal in process, by SDK and over HTTP; uses the compose Postgres on port 5426
 npm run test:e2e            # the compose stack over HTTP: machine line, MCP tools and schedules
 ./scripts/smoke.sh          # two reviews on the compose stack
 npm run build
