@@ -3,7 +3,7 @@ ARG NODE_IMAGE=node:22-bookworm-slim
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
-ARG LONG_TAIL_SPEC=@hotmeshio/long-tail@^0.36.1
+ARG LONG_TAIL_SPEC=@hotmeshio/long-tail@^0.38.0
 ARG TEMPORAL_VERSION=1.25.0
 RUN npm init -y >/dev/null \
  && npm install --omit=dev --no-audit --no-fund "${LONG_TAIL_SPEC}" \

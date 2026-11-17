@@ -47,7 +47,7 @@ activities: { ...activities, ...longTailActivities(lt) }
 docker compose up -d --build
 ```
 
-This runs Postgres, Temporal, the Temporal UI (http://localhost:8080), Long Tail (http://localhost:3200, `superadmin` / `l0ngt@1l`) and two example workers:
+This runs Postgres, Temporal, the Temporal UI (http://localhost:8080), Long Tail (http://localhost:3200, `superadmin` / `l0ngt@1l`) and two example workers. Each worker runs Long Tail in its own process ([`examples/long-tail.ts`](examples/long-tail.ts)), on the same database as the dashboard:
 
 - [`examples/review-order`](examples/review-order): a review, a two-sided inspection, an approvals accumulator, and a count of pending reviews through an MCP tool.
 - [`examples/machine-line`](examples/machine-line): units moving station to station as handoff rows, and machine commands such as a changeover.
